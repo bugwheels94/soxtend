@@ -5,6 +5,17 @@
 	"module": "dist/node/index.js",
 	"browser": "dist/browser/index.js",
 	"types": "dist/types/index.d.ts",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bugwheels94/websocket-plus.git"
+	},
+	"bugs": {
+		"url": "https://github.com/bugwheels94/websocket-plus/issues"
+	},
+	"homepage": "https://github.com/bugwheels94/websocket-plus#readme",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"prepare": "husky install",
