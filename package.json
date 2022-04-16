@@ -10,7 +10,7 @@
 		"prepare": "husky install",
 		"build": "npm run build:types && npm run build:code",
 		"build:code": " cross-env NODE_ENV=production rollup -c",
-		"build:types": "tsc --watch --project ./tsconfig.types.json && replace 'import type' 'import' ./types -r --silent && replace 'export type' 'export' ./types -r --silent",
+		"build:types": "tsc --project ./tsconfig.types.json && replace 'import type' 'import' ./types -r --silent && replace 'export type' 'export' ./types -r --silent",
 		"build:code:watch": "rollup -c -w",
 		"build:types:watch": "tsc --watch --project ./tsconfig.types.json && replace 'import type' 'import' ./types -r --silent && replace 'export type' 'export' ./types -r --silent",
 		"build:watch": "run-p build-code:watch build-types:watch"
