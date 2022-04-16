@@ -34,7 +34,8 @@
 		"prettier": "2.6.0",
 		"rollup": "^2.70.2",
 		"rollup-plugin-peer-deps-external": "^2.2.4",
-		"semantic-release": "^19.0.2"
+		"semantic-release": "^19.0.2",
+		"babel-plugin-const-enum": "^1.2.0"
 	},
 	"prettier": {
 		"singleQuote": true,
