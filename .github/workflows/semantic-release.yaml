@@ -18,6 +18,7 @@ jobs:
         with:
           cache: npm
           node-version: 16
+          cache-dependency-path: 'package.json'
       - run: npm ci
       - run: npm run build
       - run: zip -r dist.zip dist
