@@ -35,7 +35,8 @@
 		"rollup": "^2.70.2",
 		"rollup-plugin-peer-deps-external": "^2.2.4",
 		"semantic-release": "^19.0.2",
-		"babel-plugin-const-enum": "^1.2.0"
+		"babel-plugin-const-enum": "^1.2.0",
+		"@babel/plugin-transform-runtime": "^7.17.0"
 	},
 	"prettier": {
 		"singleQuote": true,
