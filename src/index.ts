@@ -1,16 +1,18 @@
 import WebSocket from 'isomorphic-ws';
 import { Client } from './client';
 import { Router } from './router';
+import { store } from './utils';
 
-export class WebsocketPlus {
+class WebSocketPlus {
 	client: Client;
 	router: Router;
 	socket: WebSocket.WebSocket;
 	constructor(socket: WebSocket.WebSocket) {
 		this.client = new Client(socket);
 		this.router = new Router(socket);
+		if ('id' in socket) store[socket['id']] = socket;
 		this.socket = socket;
-		socket.addEventListener('message', (data) => {
+		socket.addEventListener('message', ({ data }) => {
 			try {
 				const message = JSON.parse(data.toString());
 				this.router.listener(message);
@@ -25,3 +27,5 @@ export class WebsocketPlus {
 		this.socket.addEventListener('open', cb);
 	}
 }
+export type { ClientResponse, ClientRequest, MessageData } from './utils';
+export { WebSocketPlus };

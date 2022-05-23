@@ -1,7 +1,7 @@
 import resolve from '@rollup/plugin-node-resolve';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
 import babel from '@rollup/plugin-babel';
-
+import commonjs from '@rollup/plugin-commonjs';
 import globby from 'fast-glob';
 import path from 'path';
 const extensions = ['.js', '.ts'];
@@ -21,9 +21,11 @@ const getRollupConfig =
 				format: 'esm',
 			},
 			external(id) {
-				if (id.endsWith(input.replace('./', '/'))) {
+				const sanitizedId = id.split('?')[0];
+				if (sanitizedId.endsWith(input.replace('./', '/'))) {
 					return false;
 				}
+
 				return true;
 			},
 			plugins: [
@@ -31,6 +33,7 @@ const getRollupConfig =
 					extensions,
 					browser: isBrowser,
 				}),
+				commonjs(),
 				babel({
 					extensions,
 					babelHelpers: 'runtime',

@@ -3,6 +3,7 @@
 	"version": "0.0.0-development",
 	"description": "Websockets on steroid",
 	"module": "dist/node/index.js",
+	"main": "dist/node/index.js",
 	"browser": "dist/browser/index.js",
 	"types": "dist/types/index.d.ts",
 	"publishConfig": {
@@ -24,7 +25,7 @@
 		"build:types": "tsc --project ./tsconfig.types.json && replace 'import type' 'import' ./dist/types -r --silent && replace 'export type' 'export' ./dist/types -r --silent",
 		"build:code:watch": "rollup -c -w",
 		"build:types:watch": "tsc --watch --project ./tsconfig.types.json && replace 'import type' 'import' ./types -r --silent && replace 'export type' 'export' ./types -r --silent",
-		"build:watch": "run-p build-code:watch build-types:watch"
+		"build:watch": "run-p build:code:watch build:types:watch"
 	},
 	"author": "bugwheels94",
 	"license": "ISC",
