@@ -3,7 +3,7 @@ import { ClientPromiseStore, ClientResponse, ClientRequest, store } from './util
 
 export class Client {
 	id: number = -1;
-	socket: WebSocket.WebSocket;
+	socket: WebSocket;
 	promiseStore: ClientPromiseStore = {};
 	pendinMessageStore: string[] = [];
 	method(
@@ -12,7 +12,7 @@ export class Client {
 		options?: ClientRequest,
 		socketId?: string | number
 	) {
-		let socket: WebSocket.WebSocket, message: string;
+		let socket: WebSocket, message: string;
 		if (!options.forget) {
 			this.id += 1;
 			message = JSON.stringify({ [method]: url, id: this.id, ...options });
@@ -48,7 +48,7 @@ export class Client {
 	delete(url: string, options?: ClientRequest, socketId?: string | number) {
 		return this.method('delete', url, options, socketId);
 	}
-	constructor(socket: WebSocket.WebSocket) {
+	constructor(socket: WebSocket) {
 		this.socket = socket;
 		socket.addEventListener('open', () => {
 			this.pendinMessageStore.map((message) => socket.send(message));
