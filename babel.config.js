@@ -18,6 +18,15 @@ module.exports = {
 		'@babel/preset-typescript',
 	],
 	plugins: [
+		// [
+		// 'module-resolver',
+		// {
+		// 	root: ['.'],
+		// 	alias: {
+		// 		src: './src',
+		// 	},
+		// },
+		// ],
 		['@babel/plugin-proposal-decorators', { decoratorsBeforeExport: true }],
 		[
 			'const-enum',

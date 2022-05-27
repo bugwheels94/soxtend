@@ -6,8 +6,8 @@ import { store } from './utils';
 class WebSocketPlus {
 	client: Client;
 	router: Router;
-	socket: WebSocket.WebSocket;
-	constructor(socket: WebSocket.WebSocket) {
+	socket: WebSocket;
+	constructor(socket: WebSocket) {
 		this.client = new Client(socket);
 		this.router = new Router(socket);
 		if ('id' in socket) store[socket['id']] = socket;

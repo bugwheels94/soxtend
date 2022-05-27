@@ -10,7 +10,7 @@ export class Router {
 		patch: {},
 		delete: {},
 	};
-	socket: WebSocket.WebSocket;
+	socket: WebSocket;
 
 	get(url: string, ...callback: Callback[]) {
 		const previous = this.store.get[url] || [];
@@ -33,7 +33,7 @@ export class Router {
 		const previous = this.store.patch[url] || [];
 		this.store.patch[url] = [...previous, ...callback];
 	}
-	constructor(socket: WebSocket.WebSocket) {
+	constructor(socket: WebSocket) {
 		this.socket = socket;
 	}
 	async listener(message: Request) {
