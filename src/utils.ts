@@ -1,4 +1,4 @@
-import WebSocket from 'ws';
+import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
 
 export class ApiError extends Error {
@@ -52,4 +52,4 @@ export type ClientPromiseStore = Record<
 		reject: (value: ClientResponse | PromiseLike<ClientResponse>) => void;
 	}
 >;
-export const store: Record<string | number, WebSocket.WebSocket> = {};
+export const store: Record<string | number, WebSocket> = {};

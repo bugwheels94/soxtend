@@ -31,3 +31,5 @@ This provides an HTTP similar API for using Websockets in Node/Browser.
       // Show friend request popup using req.data
       res.status(200)
     })
+
+## Template
