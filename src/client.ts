@@ -9,7 +9,7 @@ export class Client {
 	method(
 		method: 'get' | 'post' | 'put' | 'patch' | 'delete',
 		url: string,
-		options?: ClientRequest,
+		options: ClientRequest = {},
 		socketId?: string | number
 	) {
 		let socket: WebSocket, message: string;
@@ -36,19 +36,19 @@ export class Client {
 	get(url: string, options?: ClientRequest, socketId?: string | number) {
 		return this.method('get', url, options, socketId);
 	}
-	post(url: string, options: ClientRequest, socketId?: string | number) {
+	post(url: string, options?: ClientRequest, socketId?: string | number) {
 		return this.method('post', url, options, socketId);
 	}
-	put(url: string, options: ClientRequest, socketId?: string | number) {
+	put(url: string, options?: ClientRequest, socketId?: string | number) {
 		return this.method('put', url, options, socketId);
 	}
-	patch(url: string, options: ClientRequest, socketId?: string | number) {
+	patch(url: string, options?: ClientRequest, socketId?: string | number) {
 		return this.method('patch', url, options, socketId);
 	}
 	delete(url: string, options?: ClientRequest, socketId?: string | number) {
 		return this.method('delete', url, options, socketId);
 	}
-	constructor(socket: WebSocket) {
+	attachSocket(socket: WebSocket) {
 		this.socket = socket;
 		socket.addEventListener('open', () => {
 			this.pendinMessageStore.map((message) => socket.send(message));
