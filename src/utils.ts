@@ -1,4 +1,5 @@
 import WebSocket from 'isomorphic-ws';
+import { MatchFunction } from 'path-to-regexp';
 import HttpStatusCode from './statusCodes';
 
 export class ApiError extends Error {
@@ -18,7 +19,13 @@ interface Json {
 }
 export type MessageData = Json | string | number | boolean | MessageData[];
 export type Callback = (request: Request, response: RouterResponse) => Promise<void>;
-export type Store = Record<'get' | 'put' | 'patch' | 'post' | 'delete', Record<string, Callback[]>>;
+export type Route = {
+	literalRoute: string;
+	match: MatchFunction<any>;
+	callbacks: Callback[];
+};
+export type Method = 'get' | 'put' | 'patch' | 'post' | 'delete';
+export type Store = Record<Method, Route[]>;
 
 export type RouterResponse = {
 	_id: number;
@@ -33,12 +40,19 @@ export type ClientResponse = {
 	data: MessageData;
 };
 export type ClientRequest = {
-	body: MessageData;
+	body?: MessageData;
 	forget?: boolean;
+	id?: never;
+	get?: never;
+	put?: never;
+	patch?: never;
+	delete?: never;
+	post?: never;
 };
 export type Request = {
 	id?: number;
-	body: MessageData;
+	body?: MessageData;
+	params: Record<string, string | number>;
 	get?: string;
 	post?: string;
 	put?: string;
