@@ -17,7 +17,7 @@ class RestifyWebSocket<T extends X> {
 	currentReconnectDelay: number = 100;
 	url: string;
 	eventStore: Record<
-		string,
+		'open' | 'close' | 'message' | 'error',
 		{
 			listener: (e?: any) => void;
 			options?: WebSocket.EventListenerOptions;
