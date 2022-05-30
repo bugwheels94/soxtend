@@ -1,6 +1,6 @@
 ## Restify Websocket
 
-This provides a very lightweight HTTP similar API for using Websockets in Node/Browser. This library is not an alternative to node "ws" package but is intended to be used as a complimentary package.
+This provides a very lightweight HTTP similar API for using Websockets in Node/Browser. WebSocket code often gets confusing because of generic `.on` and `.emit` events.
 
 ## Example
 
