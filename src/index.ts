@@ -30,6 +30,7 @@ class RestifyWebSocket<T extends X> {
 		let event: Events;
 		for (event in this.eventStore) {
 			const eventEntry = this.eventStore[event];
+			// @ts-ignore
 			socket.addEventListener(event, eventEntry.listener, eventEntry.options);
 		}
 
