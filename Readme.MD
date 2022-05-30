@@ -27,7 +27,7 @@ This provides a very lightweight HTTP similar API for using Websockets in Node/B
       res.status(200).send(user)
     })
 
-    // In browser it is recommended to pass url to RestifyWebSocket as it also handles reconnect
+    // In browser it is recommended to pass url to RestifyWebSocket as it also handles reconnect.
 
     const {router, client, socket} = new RestifyWebSocket("server-url")
     // Avoid using socket because in case of redirect you might end up pointing to old socket instance
