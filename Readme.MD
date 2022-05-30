@@ -1,35 +1,33 @@
-## Websocket Plus
+## Restify Websocket
 
-This provides an HTTP similar API for using Websockets in Node/Browser.
+This provides a very lightweight HTTP similar API for using Websockets in Node/Browser. WebSocket code often gets confusing because of generic `.on` and `.emit` events.
 
 ## Example
 
     // Sending Message
-    const wsp = new WebSocket(socket)
-    wsp.client.post('/friend-request', { body: {
-      userId: 'johndoe'
+    const { client, router } = new RestifyWebSocket(socket)
+    client.post('/users', { body: {
+      userId: 15372
+    }})
+    client.put('/users/15372', { body: {
+      age: 60
     }})
 
 
     // Receiving Message
-    const wsp = new WebSocket(socket)
-    wsp.router.post('/friend-request', (req, res) => {
+    const { client, router } = new RestifyWebSocket(socket)
+    router.post('/users', (req, res) => {
       const userId = req.data.userId
-      wsp.client.post('/friend-request', {
-        body: {
-          senderId: socket.id
-        },
-        socketId: userId
-      })
+      // save in DB and get user
+      res.status(200).send(user)
+    })
+    router.put('/users/:userId', (req, res) => {
+      const userId = req.params.userId
+      // save in DB and get user
+      res.status(200).send(user)
     })
 
-    // Receiving Message on the receiver browser
+    // In browser it is recommended to pass url to RestifyWebSocket as it also handles reconnect.
 
-    const wsp = new WebSocket(socket)
-    wsp.router.post('/friend-request', (req, res) => {
-      const userId = req.data.userId
-      // Show friend request popup using req.data
-      res.status(200)
-    })
-
-## Template
+    const {router, client, socket} = new RestifyWebSocket("server-url")
+    // Avoid using socket because in case of redirect you might end up pointing to old socket instance
