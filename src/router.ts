@@ -2,7 +2,6 @@ import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
 import { ApiError, Callback, MessageData, Method, Request, RouterResponse, Store } from './utils';
 import { match } from 'path-to-regexp';
-console.log('ANKIT', match);
 export class Router {
 	store: Store = {
 		get: [],
