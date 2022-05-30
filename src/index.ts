@@ -9,7 +9,7 @@ type WebSocketPlusOptions = {
 	maxReconnectDelay?: number;
 };
 type Options = ClientOptions & WebSocketPlusOptions;
-
+type Events = 'open' | 'close' | 'message' | 'error';
 class RestifyWebSocket<T extends X> {
 	client: Client;
 	router: Router;
@@ -17,7 +17,7 @@ class RestifyWebSocket<T extends X> {
 	currentReconnectDelay: number = 100;
 	url: string;
 	eventStore: Record<
-		'open' | 'close' | 'message' | 'error',
+		Events,
 		{
 			listener: (e?: any) => void;
 			options?: WebSocket.EventListenerOptions;
@@ -27,7 +27,8 @@ class RestifyWebSocket<T extends X> {
 		const { firstReconnectDelay = 100, maxReconnectDelay = 30000, ...nativeOptions } = options;
 		const socket: WebSocket = new WebSocket(this.url, this.url.split(':')[0], options);
 		this.socket = socket;
-		for (let event in this.eventStore) {
+		let event: Events;
+		for (event in this.eventStore) {
 			const eventEntry = this.eventStore[event];
 			socket.addEventListener(event, eventEntry.listener, eventEntry.options);
 		}
