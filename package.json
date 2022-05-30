@@ -1,5 +1,5 @@
 {
-	"name": "@lytejs/ws",
+	"name": "restify-websocket",
 	"version": "0.0.0-development",
 	"description": "Websockets on steroid",
 	"module": "dist/node/index.js",
