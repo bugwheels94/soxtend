@@ -1,9 +1,36 @@
 import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
-import { ApiError, Callback, MessageData, Method, Request, RouterResponse, Store } from './utils';
-import { match } from 'path-to-regexp';
+import { ApiError, Method } from './utils';
+import { match, MatchFunction } from 'path-to-regexp';
+export type RouterStore = Record<Method, Route[]>;
+
+export type RouterResponse = {
+	_id: number;
+	code?: HttpStatusCode | null;
+	status: (code: HttpStatusCode | null) => RouterResponse;
+	data?: any | null;
+	send: (data: any) => RouterResponse;
+};
+
+export type RouterRequest = {
+	id?: number;
+	body?: any;
+	params: Record<string, string | number>;
+	get?: string;
+	post?: string;
+	put?: string;
+	patch?: string;
+	delete?: string;
+};
+export type RouterCallback = (request: RouterRequest, response: RouterResponse) => Promise<void>;
+export type Route = {
+	literalRoute: string;
+	match: MatchFunction<any>;
+	callbacks: RouterCallback[];
+};
+
 export class Router {
-	store: Store = {
+	store: RouterStore = {
 		get: [],
 		post: [],
 		put: [],
@@ -11,35 +38,35 @@ export class Router {
 		delete: [],
 	};
 	socket: WebSocket;
-	registerRoute(method: Method, url: string, ...callbacks: Callback[]) {
+	registerRoute(method: Method, url: string, ...callbacks: RouterCallback[]) {
 		this.store[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
 			callbacks,
 		});
 	}
-	get(url: string, ...callbacks: Callback[]) {
+	get(url: string, ...callbacks: RouterCallback[]) {
 		this.registerRoute('get', url, ...callbacks);
 	}
-	put(url: string, ...callbacks: Callback[]) {
+	put(url: string, ...callbacks: RouterCallback[]) {
 		this.registerRoute('put', url, ...callbacks);
 	}
-	post(url: string, ...callbacks: Callback[]) {
+	post(url: string, ...callbacks: RouterCallback[]) {
 		this.registerRoute('post', url, ...callbacks);
 	}
-	patch(url: string, ...callbacks: Callback[]) {
+	patch(url: string, ...callbacks: RouterCallback[]) {
 		this.registerRoute('patch', url, ...callbacks);
 	}
-	delete(url: string, ...callbacks: Callback[]) {
+	delete(url: string, ...callbacks: RouterCallback[]) {
 		this.registerRoute('delete', url, ...callbacks);
 	}
 	attachSocket(socket: WebSocket) {
 		this.socket = socket;
 	}
-	async listener(message: Request) {
+	async listener(message: RouterRequest) {
 		// Message is coming from router to client and execution should be skipped
 		if ('_id' in message) return;
-		let store: Store['get'];
+		let store: RouterStore['get'];
 		let method: 'get' | 'post' | 'put' | 'patch' | 'delete';
 		if (message.get) {
 			store = this.store.get;
@@ -65,7 +92,7 @@ export class Router {
 				this.code = status;
 				return this;
 			},
-			send: function (data: MessageData) {
+			send: function (data: any) {
 				response.data = data;
 				return this;
 			},

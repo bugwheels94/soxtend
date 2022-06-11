@@ -114,5 +114,6 @@ class RestifyWebSocket<T extends X> {
 		this.socket.addEventListener('open', cb);
 	}
 }
-export type { ClientResponse, ClientRequest, MessageData } from './utils';
+export type { ClientResponse, ClientRequest, Client } from './client';
+export type { RouterResponse, RouterRequest, Router } from './router';
 export { RestifyWebSocket };
