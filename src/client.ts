@@ -47,7 +47,9 @@ export class Client {
 		} else {
 			socket = this.socket;
 		}
-		if (socket.OPEN !== socket.readyState) {
+		console.log('checking', socket.readyState, socket.OPEN);
+		if (socket.CONNECTING === socket.readyState) {
+			console.log('pushing into pending', socket.readyState, socket.OPEN);
 			this.pendinMessageStore.push(message);
 		} else {
 			socket.send(message);
