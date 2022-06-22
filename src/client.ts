@@ -1,5 +1,28 @@
 import WebSocket from 'isomorphic-ws';
-import { ClientPromiseStore, ClientResponse, ClientRequest, store } from './utils';
+import HttpStatusCode from './statusCodes';
+import { store } from './utils';
+export type ClientResponse = {
+	_id: number;
+	status: HttpStatusCode;
+	data: any;
+};
+export type ClientRequest = {
+	body?: any;
+	forget?: boolean;
+	id?: never;
+	get?: never;
+	put?: never;
+	patch?: never;
+	delete?: never;
+	post?: never;
+};
+export type ClientPromiseStore = Record<
+	string,
+	{
+		resolve: (value: ClientResponse | PromiseLike<ClientResponse>) => void;
+		reject: (value: ClientResponse | PromiseLike<ClientResponse>) => void;
+	}
+>;
 
 export class Client {
 	id: number = -1;
@@ -24,7 +47,8 @@ export class Client {
 		} else {
 			socket = this.socket;
 		}
-		if (socket.OPEN !== socket.readyState) {
+		if (socket.CONNECTING === socket.readyState) {
+			console.log('pushing into pending', socket.readyState, socket.OPEN);
 			this.pendinMessageStore.push(message);
 		} else {
 			socket.send(message);
