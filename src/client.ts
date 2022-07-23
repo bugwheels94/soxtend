@@ -1,11 +1,11 @@
 import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
-import { store } from './utils';
 export type ClientResponse = {
 	_id: number;
 	status: HttpStatusCode;
 	data: any;
 };
+type ServerClientRequest = Partial<Omit<ClientResponse, '_id'>>;
 export type ClientRequest = {
 	body?: any;
 	forget?: boolean;
@@ -28,28 +28,19 @@ export class Client {
 	id: number = -1;
 	socket: WebSocket;
 	promiseStore: ClientPromiseStore = {};
-	pendinMessageStore: string[] = [];
-	method(
-		method: 'get' | 'post' | 'put' | 'patch' | 'delete',
-		url: string,
-		options: ClientRequest = {},
-		socketId?: string | number
-	) {
+	pendingMessageStore: string[] = [];
+	method(method: 'get' | 'post' | 'put' | 'patch' | 'delete', url: string, options: ClientRequest = {}) {
 		let socket: WebSocket, message: string;
-		if (!options.forget) {
+		const { forget, ...remaining } = options;
+		if (!forget) {
 			this.id += 1;
-			message = JSON.stringify({ [method]: url, id: this.id, ...options });
+			message = JSON.stringify({ ...remaining, [method]: url, id: this.id });
 		} else {
-			message = JSON.stringify({ [method]: url, ...options });
+			message = JSON.stringify({ ...remaining, [method]: url });
 		}
-		if (socketId) {
-			socket = store[socketId];
-		} else {
-			socket = this.socket;
-		}
+		socket = this.socket;
 		if (socket.CONNECTING === socket.readyState) {
-			console.log('pushing into pending', socket.readyState, socket.OPEN);
-			this.pendinMessageStore.push(message);
+			this.pendingMessageStore.push(message);
 		} else {
 			socket.send(message);
 		}
@@ -57,26 +48,26 @@ export class Client {
 			this.promiseStore[this.id] = { resolve, reject };
 		});
 	}
-	get(url: string, options?: ClientRequest, socketId?: string | number) {
-		return this.method('get', url, options, socketId);
+	get(url: string, options?: ClientRequest) {
+		return this.method('get', url, options);
 	}
-	post(url: string, options?: ClientRequest, socketId?: string | number) {
-		return this.method('post', url, options, socketId);
+	post(url: string, options?: ClientRequest) {
+		return this.method('post', url, options);
 	}
-	put(url: string, options?: ClientRequest, socketId?: string | number) {
-		return this.method('put', url, options, socketId);
+	put(url: string, options?: ClientRequest) {
+		return this.method('put', url, options);
 	}
-	patch(url: string, options?: ClientRequest, socketId?: string | number) {
-		return this.method('patch', url, options, socketId);
+	patch(url: string, options?: ClientRequest) {
+		return this.method('patch', url, options);
 	}
-	delete(url: string, options?: ClientRequest, socketId?: string | number) {
-		return this.method('delete', url, options, socketId);
+	delete(url: string, options?: ClientRequest) {
+		return this.method('delete', url, options);
 	}
-	attachSocket(socket: WebSocket) {
+	onSocketCreated(socket: WebSocket) {
 		this.socket = socket;
 		socket.addEventListener('open', () => {
-			this.pendinMessageStore.map((message) => socket.send(message));
-			this.pendinMessageStore = [];
+			this.pendingMessageStore.map((message) => socket.send(message));
+			this.pendingMessageStore = [];
 		});
 	}
 	async listener(message: ClientResponse) {
@@ -88,5 +79,67 @@ export class Client {
 			this.promiseStore[message._id].reject(message);
 		}
 		delete this.promiseStore[message._id];
+	}
+}
+
+export class ServerClient {
+	id: number = -1;
+	sockets: Set<WebSocket>;
+	method(method: 'get' | 'post' | 'put' | 'patch' | 'delete', url: string, options: ServerClientRequest = {}) {
+		const { data, ...remaining } = options;
+		let sockets = this.sockets,
+			message = JSON.stringify({ [method]: url, data: data, ...remaining });
+		sockets = this.sockets;
+		sockets.forEach((socket) => socket.send(message));
+	}
+	constructor(sockets: Set<WebSocket>) {
+		this.sockets = sockets;
+	}
+	get(url: string, options?: ServerClientRequest) {
+		return this.method('get', url, options);
+	}
+	post(url: string, options?: ServerClientRequest) {
+		return this.method('post', url, options);
+	}
+	put(url: string, options?: ServerClientRequest) {
+		return this.method('put', url, options);
+	}
+	patch(url: string, options?: ServerClientRequest) {
+		return this.method('patch', url, options);
+	}
+	delete(url: string, options?: ServerClientRequest) {
+		return this.method('delete', url, options);
+	}
+}
+export class ServerClients {
+	clients: Map<string | number, ServerClient> = new Map();
+	listOfAllSockets: Set<WebSocket> = new Set();
+
+	add(socket: WebSocket) {
+		const socketSet = new Set<WebSocket>();
+		socketSet.add(socket);
+		if (!('groupId' in socket)) return new ServerClient(socketSet);
+		const groupId = socket['groupId'];
+		const existingClient = this.clients.get(groupId);
+		this.listOfAllSockets.add(socket);
+		if (existingClient) {
+			existingClient.sockets.add(socket);
+			return existingClient;
+		}
+		const newClient = new ServerClient(socketSet);
+		this.clients.set(groupId, newClient);
+		return newClient;
+	}
+	find(id: string | number) {
+		return this.clients.get(id);
+	}
+	remove(socket: WebSocket) {
+		if (!('groupId' in socket)) return;
+		const client = this.clients.get(socket['groupId']);
+		client.sockets.delete(socket);
+		this.listOfAllSockets.delete(socket);
+	}
+	constructor() {
+		this.clients.set('*', new ServerClient(this.listOfAllSockets));
 	}
 }

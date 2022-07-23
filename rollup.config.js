@@ -18,7 +18,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const isPackageDependency = (pkg, path, importer = '') => {
 	return (
 		path.includes('node_modules/' + pkg) ||
-		(importer.includes('node_modules/' + pkg) && (console.log('???', path, importer), path.startsWith('.'))) ||
+		(importer.includes('node_modules/' + pkg) && path.startsWith('.')) ||
 		path === pkg
 	);
 };
