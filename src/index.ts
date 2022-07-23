@@ -1,8 +1,9 @@
 import WebSocket from 'isomorphic-ws';
-import { Client } from './client';
+import { Client, ServerClient, ServerClients } from './client';
 import { Router } from './router';
-import { store } from './utils';
-import { ClientOptions } from 'ws';
+import { ClientOptions, ServerOptions } from 'ws';
+import { RedisClientType } from 'redis';
+import { Receiver } from './receiver';
 type X = WebSocket | string;
 type WebSocketPlusOptions = {
 	firstReconnectDelay?: number;
@@ -10,9 +11,84 @@ type WebSocketPlusOptions = {
 };
 type Options = ClientOptions & WebSocketPlusOptions;
 type Events = 'open' | 'close' | 'message' | 'error';
+type RestifyServerEvents = 'connection' | 'close';
+
+const onSocketCreated = (socket: WebSocket, router: Receiver, client: Client) => {
+	client.onSocketCreated(socket);
+	socket.addEventListener('message', ({ data }) => {
+		try {
+			const message = JSON.parse(data.toString());
+			router.listener(message);
+			if (client instanceof Client) client.listener(message);
+		} catch (e) {
+			console.log('Cannot parse message into JSON!', data.toString());
+		}
+	});
+};
+const onServerSocketCreated = (socket: WebSocket, router: Router) => {
+	socket.addEventListener('message', ({ data }) => {
+		try {
+			const message = JSON.parse(data.toString());
+			router.listener(message, socket);
+		} catch (e) {
+			console.log('Cannot parse message into JSON!', data.toString());
+		}
+	});
+};
 class RestifyWebSocket<T extends X> {
+	static Server = class {
+		eventStore: Record<
+			RestifyServerEvents,
+			{
+				listener: (e?: any) => void;
+			}[]
+		> = {
+			connection: [],
+			close: [],
+		};
+		constructor(
+			options: ServerOptions & {
+				redisClient?: RedisClientType;
+			}
+		) {
+			const { redisClient, ...serverOptions } = options;
+			this.server = new WebSocket.Server(serverOptions);
+			this.router = new Router();
+			this.router.clients = this.clients;
+			this.server.on('connection', (socket) => {
+				const client = this.clients.add(socket);
+				onServerSocketCreated(socket, this.router);
+				const connectionEvents = this.eventStore['connection'] || [];
+				connectionEvents.forEach(({ listener }) => {
+					listener({ client, socket });
+				});
+				socket.addEventListener('close', () => {
+					const connectionEvents = this.eventStore['connection'] || [];
+					connectionEvents.forEach(({ listener }) => {
+						listener({ client, socket });
+					});
+					this.clients.remove(socket);
+				});
+			});
+		}
+		addEventListener(
+			method: 'connection',
+			listener: (event: { client: ServerClient; socket: WebSocket }) => void
+		): void;
+		addEventListener(method: 'close', listener: (event: { client: ServerClient; socket: WebSocket }) => void): void;
+
+		addEventListener(method: string, listener: (e?: any) => void) {
+			this.eventStore[method] = this.eventStore[method] || [];
+			this.eventStore[method].push({
+				listener,
+			});
+		}
+		server: WebSocket.Server;
+		router: Router;
+		clients: ServerClients = new ServerClients();
+	};
 	client: Client;
-	router: Router;
+	receiver: Receiver;
 	socket: WebSocket;
 	currentReconnectDelay: number = 100;
 	url: string;
@@ -21,7 +97,7 @@ class RestifyWebSocket<T extends X> {
 		{
 			listener: (e?: any) => void;
 			options?: WebSocket.EventListenerOptions;
-		}
+		}[]
 	>;
 	connect(options: Options = {}) {
 		const { firstReconnectDelay = 100, maxReconnectDelay = 30000, ...nativeOptions } = options;
@@ -38,24 +114,13 @@ class RestifyWebSocket<T extends X> {
 		socket.addEventListener('close', () =>
 			this.onWebsocketClose({ ...nativeOptions, firstReconnectDelay, maxReconnectDelay })
 		);
-		this.attachSocket(socket);
+		this.onSocketCreated(socket);
 		return socket;
 	}
-	attachSocket(socket: WebSocket) {
-		this.client.attachSocket(socket);
-		this.router.attachSocket(socket);
-		socket.addEventListener('message', ({ data }) => {
-			try {
-				const message = JSON.parse(data.toString());
-				this.router.listener(message);
-				this.client.listener(message);
-			} catch (e) {
-				console.log('Cannot parse message into JSON!', data.toString());
-			}
-		});
+	onSocketCreated(socket: WebSocket) {
+		onSocketCreated(socket, this.receiver, this.client);
 	}
 	onWebsocketOpen(options: WebSocketPlusOptions) {
-		console.log('SSS');
 		this.currentReconnectDelay = options.firstReconnectDelay;
 	}
 
@@ -90,23 +155,23 @@ class RestifyWebSocket<T extends X> {
 		options?: WebSocket.EventListenerOptions
 	): void;
 	addEventListener(method: string, listener: (e?: any) => void, options?: WebSocket.EventListenerOptions) {
-		this.eventStore[method] = this.eventStore[method] || {
+		this.eventStore[method] = this.eventStore[method] || [];
+		this.eventStore[method].push({
 			listener,
 			options,
-		};
+		});
 	}
 	constructor(urlOrSocket: T, options?: T extends string ? WebSocketPlusOptions : Options) {
 		this.client = new Client();
-		this.router = new Router();
+		this.receiver = new Receiver();
 		let socket: WebSocket;
 		if (typeof urlOrSocket === 'string') {
 			this.url = urlOrSocket;
 			socket = this.connect(options);
 		} else {
 			socket = urlOrSocket;
-			this.attachSocket(socket);
+			this.onSocketCreated(socket);
 		}
-		if ('id' in socket) store[socket['id']] = socket;
 		this.socket = socket;
 	}
 	onConnect(cb: () => void) {
