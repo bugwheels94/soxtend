@@ -15,4 +15,4 @@ export class ApiError extends Error {
 }
 
 export type Method = 'get' | 'put' | 'patch' | 'post' | 'delete';
-export const store: Record<string | number, WebSocket> = {};
+export const store: Record<string | number, WebSocket[]> = {};
