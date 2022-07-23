@@ -1,17 +1,16 @@
 <h1 align="center">Restify Websocket ( Beta )</h1>
 <p align="center">Easiest Websocket library for big projects</p>
-<p>&nbsp;</p>
 
 ![alt text](docs/banner.png)
 
-# Why Another Library?
+## Why Another Library?
 
 1. Is event based system(.emit/.on) too basic to meet your app needs making development slow?
 1. Do you want to wait for server response while sending websocket message with ease?
 1. Do you want to use react-query with websockets?
 1. Do you want to deploy to multi-node cluster with ease using Redis without doing anything extra? (Coming Soon!)
 
-# Introduction
+## Introduction
 
 `restify-websocket` provides a very lightweight HTTP similar API for using Websockets in Node/Browser. WebSocket code often gets confusing because of generic `.on` and `.emit` events. While HTTP model has REST standard for CRUD, Websockets have nothing more than socket.io(rooms, namespaces). This library provides:
 
@@ -19,9 +18,9 @@
 1. If you are familiar with ExpressJS then this library you already know with few exceptions.
 1. Send Request from Browser like Fetch API and get promise in return
 
-# Examples
+## Examples
 
-## HTTP Get-like Request
+### HTTP Get-like Request
 
     // Browser
     export const { client, receiver, socket } = new RestifyWebSocket(SERVER_URL)
@@ -43,7 +42,7 @@
       res.status(200).send(user)
     })
 
-## Sending data from Server
+### Sending data from Server
 
 Many times this happens that Websocket server sends data to Browser without being requested by Browser. For that case, receivers are available.
 
@@ -59,7 +58,7 @@ Many times this happens that Websocket server sends data to Browser without bein
       data: [1, 2, 3] // it is body because we are sending for browser
     })
 
-## Multiple Tabs Communication
+### Multiple Tabs Communication
 
 If user is opening from multiple tabs and you want to update each tab, since this is a normal real-time application requirement
 
@@ -90,7 +89,7 @@ Meanwhile the tab that made the request in the first place will also get the ack
     }
     console.log(data) // Generally you dont want data here, since the receiver will also get the data for you.
 
-## Multiple Tabs Warning like Whatsapp
+### Multiple Tabs Warning like Whatsapp
 
     const { clients, router, server } = new RestifyWebSocket.Server()
     router.get('/users/:userId', (req, res) => {
@@ -100,6 +99,6 @@ Meanwhile the tab that made the request in the first place will also get the ack
       res.send(user)  // This will send to current tab with the user info
     })
 
-## With react-query
+### With react-query
 
 Coming soon!
