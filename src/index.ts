@@ -8,6 +8,7 @@ type X = WebSocket | string;
 type WebSocketPlusOptions = {
 	firstReconnectDelay?: number;
 	maxReconnectDelay?: number;
+	connectWithDelay?: number;
 };
 type Options = ClientOptions & WebSocketPlusOptions;
 type Events = 'open' | 'close' | 'message' | 'error';
@@ -101,7 +102,7 @@ class RestifyWebSocket<T extends X> {
 	>;
 	connect(options: Options = {}) {
 		const { firstReconnectDelay = 100, maxReconnectDelay = 30000, ...nativeOptions } = options;
-		const socket: WebSocket = new WebSocket(this.url, this.url.split(':')[0], options);
+		const socket: WebSocket = new WebSocket(this.url, this.url.split(':')[0], nativeOptions);
 		this.socket = socket;
 		let event: Events;
 		for (event in this.eventStore) {
@@ -167,11 +168,16 @@ class RestifyWebSocket<T extends X> {
 		let socket: WebSocket;
 		if (typeof urlOrSocket === 'string') {
 			this.url = urlOrSocket;
-			socket = this.connect(options);
+			if (options.connectWithDelay) {
+				setTimeout(() => {
+					socket = this.connect(options);
+				}, options.connectWithDelay);
+			} else socket = this.connect(options);
 		} else {
 			socket = urlOrSocket;
 			this.onSocketCreated(socket);
 		}
+		if (options.connectWithDelay) return;
 		this.socket = socket;
 	}
 	onConnect(cb: () => void) {

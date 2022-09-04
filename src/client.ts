@@ -24,6 +24,9 @@ export type ClientPromiseStore = Record<
 	}
 >;
 
+const stringify = (v: any) => {
+	return JSON.stringify(v);
+};
 export class Client {
 	id: number = -1;
 	socket: WebSocket;
@@ -34,9 +37,9 @@ export class Client {
 		const { forget, ...remaining } = options;
 		if (!forget) {
 			this.id += 1;
-			message = JSON.stringify({ ...remaining, [method]: url, id: this.id });
+			message = stringify({ ...remaining, [method]: url, id: this.id });
 		} else {
-			message = JSON.stringify({ ...remaining, [method]: url });
+			message = stringify({ ...remaining, [method]: url });
 		}
 		socket = this.socket;
 		if (socket.CONNECTING === socket.readyState) {
@@ -88,7 +91,7 @@ export class ServerClient {
 	method(method: 'get' | 'post' | 'put' | 'patch' | 'delete', url: string, options: ServerClientRequest = {}) {
 		const { data, ...remaining } = options;
 		let sockets = this.sockets,
-			message = JSON.stringify({ [method]: url, data: data, ...remaining });
+			message = stringify({ [method]: url, data: data, ...remaining });
 		sockets = this.sockets;
 		sockets.forEach((socket) => socket.send(message));
 	}

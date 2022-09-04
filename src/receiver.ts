@@ -24,6 +24,8 @@ export type ReceiverRoute = {
 };
 export type ReceiverRequest<P extends object = object> = {} & MatchResult<P>;
 
+type Params = Record<string, string | number>;
+
 export class Receiver {
 	store: ReceiverStore = {
 		get: [],
@@ -39,19 +41,19 @@ export class Receiver {
 			callbacks,
 		});
 	}
-	get<P extends object = object>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+	get<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute('get', url, ...callbacks);
 	}
-	put<P extends object = object>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+	put<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute('put', url, ...callbacks);
 	}
-	post<P extends object = object>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+	post<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute('post', url, ...callbacks);
 	}
-	patch<P extends object = object>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+	patch<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute('patch', url, ...callbacks);
 	}
-	delete<P extends object = object>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+	delete<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute('delete', url, ...callbacks);
 	}
 	async listener(message: ReceiverResponse) {
