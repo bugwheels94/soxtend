@@ -55,7 +55,7 @@ Many times this happens that Websocket server sends data to Browser without bein
     // SERVER
     const { clients, router, server } = new RestifyWebSocket.Server()
     clients.find('*').get('/stocks/goldman-sachs', {
-      data: [1, 2, 3] // it is body because we are sending for browser
+      data: [1, 2, 3] // it is not body, like typical fetch, because we are sending for browser
     })
 
 ### Multiple Tabs Communication
