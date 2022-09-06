@@ -14,11 +14,13 @@ export type RouterResponse = {
 	status: (code: HttpStatusCode | null) => RouterResponse;
 	data?: any | null;
 	groupedClients: ServerClient;
+	socket: WebSocket;
 	send: (data: any) => RouterResponse;
-	group: Omit<RouterResponse, 'group' | 'othersInGroup' | 'groupedClients'>;
-	othersInGroup: Omit<RouterResponse, 'group' | 'othersInGroup' | 'groupedClients'>;
+	group: Omit<RouterResponse, 'group' | 'othersInGroup' | 'groupedClients' | 'socket' | 'clients'>;
+	othersInGroup: Omit<RouterResponse, 'group' | 'othersInGroup' | 'groupedClients' | 'socket' | 'clients'>;
+	clients: ServerClients;
 };
-export type RouterRequest = {
+export type RouterRequest<P extends object = object> = {
 	id?: number;
 	body?: any;
 	get?: string;
@@ -26,14 +28,18 @@ export type RouterRequest = {
 	put?: string;
 	patch?: string;
 	delete?: string;
-} & MatchResult<Record<string, string | number>>;
-export type RouterCallback = (request: RouterRequest, response: RouterResponse) => Promise<void>;
+} & MatchResult<P>;
+export type RouterCallback<P extends object = object> = (
+	request: RouterRequest<P>,
+	response: RouterResponse
+) => Promise<void>;
 export type Route = {
 	literalRoute: string;
 	match: MatchFunction<any>;
 	callbacks: RouterCallback[];
 };
 
+type Params = Record<string, string | number>;
 export class Router {
 	store: RouterStore = {
 		get: [],
@@ -50,19 +56,19 @@ export class Router {
 			callbacks,
 		});
 	}
-	get(url: string, ...callbacks: RouterCallback[]) {
+	get<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute('get', url, ...callbacks);
 	}
-	put(url: string, ...callbacks: RouterCallback[]) {
+	put<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute('put', url, ...callbacks);
 	}
-	post(url: string, ...callbacks: RouterCallback[]) {
+	post<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute('post', url, ...callbacks);
 	}
-	patch(url: string, ...callbacks: RouterCallback[]) {
+	patch<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute('patch', url, ...callbacks);
 	}
-	delete(url: string, ...callbacks: RouterCallback[]) {
+	delete<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute('delete', url, ...callbacks);
 	}
 	async listener(message: RouterRequest, socket: WebSocket) {
@@ -86,9 +92,14 @@ export class Router {
 			method = 'delete';
 			store = this.store.delete;
 		}
-		const groupedClients = this.clients.find(socket['groupId']);
+		const clients = this.clients;
 		const response: RouterResponse = {
-			groupedClients,
+			socket,
+			clients: this.clients,
+			get groupedClients() {
+				console.log(socket['groupId']);
+				return clients.find(socket['groupId']);
+			},
 			status: function (status: HttpStatusCode | null) {
 				if (this.code !== undefined)
 					throw new Error(`Cannot overwrite status status(${status}) from previously set status(${this.code}) `);
@@ -138,12 +149,12 @@ export class Router {
 			socket.send(JSON.stringify({ _id: message.id, data: response.data, status: response.code }));
 		}
 		if (response.group.data != null || response.group.code != null) {
-			groupedClients.method(method, message[method], {
+			response.groupedClients.method(method, message[method], {
 				data: response.group.data,
 			});
 		}
 		if (response.othersInGroup.data != null || response.othersInGroup.code != null) {
-			groupedClients.method(method, message[method], {
+			response.groupedClients.method(method, message[method], {
 				data: response.data,
 			});
 		}
