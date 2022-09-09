@@ -97,7 +97,6 @@ export class Router {
 			socket,
 			clients: this.clients,
 			get groupedClients() {
-				console.log(socket['groupId']);
 				return clients.find(socket['groupId']);
 			},
 			status: function (status: HttpStatusCode | null) {
