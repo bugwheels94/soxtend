@@ -1,6 +1,6 @@
 {
 	"name": "restify-websocket",
-	"version": "0.0.0-development",
+	"version": "1.0.0",
 	"description": "Websockets on steroid",
 	"module": "dist/node/index.js",
 	"main": "dist/node/index.js",
