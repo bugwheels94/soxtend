@@ -39,7 +39,7 @@ export type Route = {
 	callbacks: RouterCallback[];
 };
 
-type Params = Record<string, string | number>;
+type Params = Record<string, string>;
 export class Router {
 	store: RouterStore = {
 		get: [],

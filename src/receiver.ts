@@ -24,7 +24,7 @@ export type ReceiverRoute = {
 };
 export type ReceiverRequest<P extends object = object> = {} & MatchResult<P>;
 
-type Params = Record<string, string | number>;
+type Params = Record<string, string>;
 
 export class Receiver {
 	store: ReceiverStore = {
