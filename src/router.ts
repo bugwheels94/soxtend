@@ -1,37 +1,87 @@
-import WebSocket from 'isomorphic-ws';
+import { TextEncoder } from 'util';
 import HttpStatusCode from './statusCodes';
-import { ApiError, Method } from './utils';
+import { ApiError, MethodEnum, parseBrowserMessage, createMessageForBrowser, Method } from './utils';
 import { match, MatchFunction, MatchResult } from 'path-to-regexp';
-import { ServerClient, ServerClients } from './client';
-export type RouterStore = Record<Method, Route[]>;
+import { Socket } from './client';
+import { DistributedStore } from './distributedStore';
+import { SocketGroupStore, IndividualSocketConnectionStore } from './localStores';
+export type RouterStore = Record<MethodEnum, Route[]>;
 
-/**
- * Simlar Socket means sockets with same socket.id
- */
-export type RouterResponse = {
-	_id?: string | number;
-	code?: HttpStatusCode | null;
-	status: (code: HttpStatusCode | null) => RouterResponse;
-	data?: any | null;
-	groupedClients: ServerClient;
-	socket: WebSocket;
-	send: (data: any) => RouterResponse;
-	group: Omit<RouterResponse, 'group' | 'othersInGroup' | 'groupedClients' | 'socket' | 'clients'>;
-	othersInGroup: Omit<RouterResponse, 'group' | 'othersInGroup' | 'groupedClients' | 'socket' | 'clients'>;
-	clients: ServerClients;
-};
 export type RouterRequest<P extends object = object> = {
-	id?: number;
-	body?: any;
-	get?: string;
-	post?: string;
-	put?: string;
-	patch?: string;
-	delete?: string;
+	requestId?: number;
+	message?: any;
+	method: MethodEnum;
+	url: string;
+	header?: Record<string, string>;
 } & MatchResult<P>;
+type SendMessageFromServerOptions = {
+	method?: Method;
+	headers?: Record<string, string | number>;
+	status?: HttpStatusCode;
+	url?: string;
+};
+const temp = {
+	get: MethodEnum.GET,
+	post: MethodEnum.POST,
+	put: MethodEnum.PUT,
+	patch: MethodEnum.PATCH,
+	delete: MethodEnum.DELETE,
+};
+function createResponse(
+	type: 'self' | 'group' | 'individual',
+	message: ReturnType<typeof parseBrowserMessage>,
+	instance: Socket | string,
+	router: Router
+) {
+	let hasStatusBeenSet = false;
+	return {
+		...(instance instanceof Socket
+			? {
+					joinGroup: (groupId: string) => {
+						router.joinGroup(groupId, instance);
+					},
+			  }
+			: {}),
+		_status: 200,
+		_url: String,
+		headers: undefined,
+		set: function (key: string, value: string) {
+			this.headers = this.headers || {};
+			this.headers[key] = value;
+		},
+		socket: instance,
+		clients: router.socketGroupStore,
+		group: function (groupName: string) {
+			return createResponse('group', message, groupName, router);
+		},
+		to: function (connectionId: string) {
+			return createResponse('individual', message, connectionId, router);
+		},
+		status: function (status: HttpStatusCode) {
+			if (hasStatusBeenSet)
+				throw new Error(`Cannot overwrite status status(${status}) from previously set status(${this._status}) `);
+			this._status = status;
+			hasStatusBeenSet = true;
+			return this;
+		},
+		send: function (data: any, options: SendMessageFromServerOptions = {}) {
+			const finalMessage = createMessageForBrowser(
+				options.url || message.url,
+				options.method === undefined ? message.method : temp[options.method],
+				options.headers || this.headers,
+				options.status === undefined ? this._status : options.status,
+				type === 'self' ? message.requestId : undefined,
+				data
+			);
+			if (type === 'group' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
+			else if (type === 'individual' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
+			else if (type === 'self' && instance instanceof Socket) instance.send(finalMessage);
+		},
+	};
+}
 export type RouterCallback<P extends object = object> = (
 	request: RouterRequest<P>,
-	response: RouterResponse
+	response: ReturnType<typeof createResponse>
 ) => Promise<void>;
 export type Route = {
 	literalRoute: string;
@@ -40,16 +90,63 @@ export type Route = {
 };
 
 type Params = Record<string, string>;
+const encoder = new TextEncoder();
 export class Router {
 	store: RouterStore = {
-		get: [],
-		post: [],
-		put: [],
-		patch: [],
-		delete: [],
+		[MethodEnum.GET]: [],
+		[MethodEnum.PUT]: [],
+		[MethodEnum.POST]: [],
+		[MethodEnum.PATCH]: [],
+		[MethodEnum.DELETE]: [],
 	};
-	clients: ServerClients;
-	registerRoute(method: Method, url: string, ...callbacks: RouterCallback[]) {
+	constructor(private serverId: string, private distributedStore?: DistributedStore) {
+		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
+		this.socketGroupStore = new SocketGroupStore();
+		this.listenToIndividualQueue(`i:${this.serverId}`);
+		this.listenToGroupQueue(`g:${this.serverId}`);
+	}
+	individualSocketConnectionStore: IndividualSocketConnectionStore;
+
+	socketGroupStore: SocketGroupStore;
+	async listenToIndividualQueue(queueName: string) {
+		// `i:${serverId}`
+		if (!this.distributedStore) return;
+		this.distributedStore.listen(queueName, (connectionId: string, message: string) => {
+			this.individualSocketConnectionStore.find(connectionId).send(encoder.encode(message));
+		});
+	}
+	async listenToGroupQueue(queueName: string) {
+		// `g:${serverId}`
+		if (!this.distributedStore) return;
+		this.distributedStore.listen(queueName, (groupId: string, message: string) => {
+			this.socketGroupStore.find(groupId).forEach((socket) => {
+				socket.send(encoder.encode(message));
+			});
+		});
+	}
+	async sendToGroup(id: string, message: Uint8Array) {
+		this.socketGroupStore.find(id).forEach((socket) => {
+			socket.send(message);
+		});
+		if (!this.distributedStore) return;
+		this.distributedStore.sendToGroup(id, message);
+	}
+	async joinGroup(id: string, socket: Socket) {
+		this.socketGroupStore.add(socket, id);
+		socket.groups.add(id);
+		if (!this.distributedStore) return;
+		this.distributedStore.joinGroup(id);
+	}
+	async sendToIndividual(id: string, message: Uint8Array) {
+		const socket = this.individualSocketConnectionStore.find(id);
+		if (socket) {
+			socket.send(message);
+			return;
+		}
+		if (!this.distributedStore) return;
+		this.distributedStore.sendToIndividual(id, message);
+	}
+	registerRoute(method: MethodEnum, url: string, ...callbacks: RouterCallback[]) {
 		this.store[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
@@ -57,105 +154,52 @@ export class Router {
 		});
 	}
 	get<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
-		this.registerRoute('get', url, ...callbacks);
+		this.registerRoute(MethodEnum.GET, url, ...callbacks);
 	}
 	put<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
-		this.registerRoute('put', url, ...callbacks);
+		this.registerRoute(MethodEnum.PUT, url, ...callbacks);
 	}
 	post<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
-		this.registerRoute('post', url, ...callbacks);
+		this.registerRoute(MethodEnum.POST, url, ...callbacks);
 	}
 	patch<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
-		this.registerRoute('patch', url, ...callbacks);
+		this.registerRoute(MethodEnum.PATCH, url, ...callbacks);
 	}
 	delete<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
-		this.registerRoute('delete', url, ...callbacks);
+		this.registerRoute(MethodEnum.DELETE, url, ...callbacks);
 	}
-	async listener(message: RouterRequest, socket: WebSocket) {
+	async listener(message: ReturnType<typeof parseBrowserMessage>, mySocket: Socket) {
 		// Message is coming from router to client and execution should be skipped
-		if ('_id' in message) return;
-		let store: RouterStore['get'];
-		let method: 'get' | 'post' | 'put' | 'patch' | 'delete';
-		if (message.get) {
-			store = this.store.get;
-			method = 'get';
-		} else if (message.post) {
-			method = 'post';
-			store = this.store.post;
-		} else if (message.put) {
-			method = 'put';
-			store = this.store.put;
-		} else if (message.patch) {
-			method = 'patch';
-			store = this.store.patch;
-		} else {
-			method = 'delete';
-			store = this.store.delete;
-		}
-		const clients = this.clients;
-		const response: RouterResponse = {
-			socket,
-			clients: this.clients,
-			get groupedClients() {
-				return clients.find(socket['groupId']);
-			},
-			status: function (status: HttpStatusCode | null) {
-				if (this.code !== undefined)
-					throw new Error(`Cannot overwrite status status(${status}) from previously set status(${this.code}) `);
-				this.code = status;
-				return this;
-			},
-			send: function (data: any) {
-				this.data = data;
-				return this;
-			},
-			group: {
-				status: (status: HttpStatusCode | null) => {
-					return response.status.bind(response.group)(status);
-				},
-				send: function (data: any) {
-					return response.send.bind(response.group)(data);
-				},
-			},
-			othersInGroup: {
-				status: (status: HttpStatusCode | null) => {
-					return response.status.bind(response.othersInGroup)(status);
-				},
-				send: function (data: any) {
-					return response.send.bind(response.othersInGroup)(data);
-				},
-			},
-		};
+		let store: RouterStore[MethodEnum.GET];
+		let method: MethodEnum = message.method;
+		store = this.store[method];
+		/**
+		 * Response usage
+		 *
+		 * res.status(number).send()
+		 * res.group(string).status(number).send()
+		 * res.to(string).status(number).send()
+		 *
+		 */
+
+		const response = createResponse('self', message, mySocket, this);
 		try {
 			for (let i = 0; i < store.length; i += 1) {
-				const matched = store[i].match(message[method]);
+				const matched = store[i].match(message.url);
 				if (!matched) continue;
 				for (let j = 0; j < store[i].callbacks.length; j++)
 					await store[i].callbacks[j]({ ...message, ...matched }, response);
-				if (response.data !== undefined) break;
 			}
-			// By default send one acknowledgment
-			response.code = response.code === undefined ? 200 : response.code;
 		} catch (error) {
-			if (error instanceof ApiError) {
-				response.data = error.message;
-				response.code = error.status;
-			} else response.code = response.code === undefined ? 500 : response.code;
 			console.log(error);
-		}
-
-		if (response.code !== null && message.id !== undefined) {
-			socket.send(JSON.stringify({ _id: message.id, data: response.data, status: response.code }));
-		}
-		if (response.group.data != null || response.group.code != null) {
-			response.groupedClients.method(method, message[method], {
-				data: response.group.data,
-			});
-		}
-		if (response.othersInGroup.data != null || response.othersInGroup.code != null) {
-			response.groupedClients.method(method, message[method], {
-				data: response.data,
-			});
+			if (error instanceof ApiError) {
+				response.status(error.status);
+				response.send(error.message);
+			} else {
+				response.status(500);
+				response.send(null);
+			}
+			console.log(error);
 		}
 	}
 }

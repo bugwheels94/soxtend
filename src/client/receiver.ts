@@ -1,6 +1,6 @@
-import { Method } from './utils';
+import { MethodEnum, parseServerMessage } from './utils';
 import { match, MatchFunction, MatchResult } from 'path-to-regexp';
-export type ReceiverStore = Record<Method, ReceiverRoute[]>;
+export type ReceiverStore = Record<MethodEnum, ReceiverRoute[]>;
 
 /**
  * Simlar Socket means sockets with same socket.id
@@ -28,13 +28,13 @@ type Params = Record<string, string>;
 
 export class Receiver {
 	store: ReceiverStore = {
-		get: [],
-		post: [],
-		put: [],
-		patch: [],
-		delete: [],
+		[MethodEnum.GET]: [],
+		[MethodEnum.POST]: [],
+		[MethodEnum.PUT]: [],
+		[MethodEnum.PATCH]: [],
+		[MethodEnum.DELETE]: [],
 	};
-	registerRoute(method: Method, url: string, ...callbacks: ReceiverCallback[]) {
+	registerRoute(method: MethodEnum, url: string, ...callbacks: ReceiverCallback[]) {
 		this.store[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
@@ -42,43 +42,26 @@ export class Receiver {
 		});
 	}
 	get<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute('get', url, ...callbacks);
+		this.registerRoute(MethodEnum.GET, url, ...callbacks);
 	}
 	put<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute('put', url, ...callbacks);
+		this.registerRoute(MethodEnum.PUT, url, ...callbacks);
 	}
 	post<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute('post', url, ...callbacks);
+		this.registerRoute(MethodEnum.POST, url, ...callbacks);
 	}
 	patch<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute('patch', url, ...callbacks);
+		this.registerRoute(MethodEnum.PATCH, url, ...callbacks);
 	}
 	delete<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute('delete', url, ...callbacks);
+		this.registerRoute(MethodEnum.DELETE, url, ...callbacks);
 	}
-	async listener(message: ReceiverResponse) {
+	async listener(message: Awaited<ReturnType<typeof parseServerMessage>>) {
 		// Message is coming from router to client and execution should be skipped
-		let store: ReceiverStore['get'];
-		let method: 'get' | 'post' | 'put' | 'patch' | 'delete';
-		if (message.get) {
-			store = this.store.get;
-			method = 'get';
-		} else if (message.post) {
-			method = 'post';
-			store = this.store.post;
-		} else if (message.put) {
-			method = 'put';
-			store = this.store.put;
-		} else if (message.patch) {
-			method = 'patch';
-			store = this.store.patch;
-		} else {
-			method = 'delete';
-			store = this.store.delete;
-		}
+		let store: ReceiverStore[MethodEnum.GET] = this.store[message.method];
 		try {
 			for (let i = 0; i < store.length; i += 1) {
-				const matched = store[i].match(message[method]);
+				const matched = store[i].match(message.url);
 				if (!matched) continue;
 				for (let j = 0; j < store[i].callbacks.length; j++) await store[i].callbacks[j](matched, { ...message });
 			}
