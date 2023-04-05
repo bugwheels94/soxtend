@@ -1,5 +1,9 @@
 import { Socket } from './client';
 
+export interface LocalGroupStore {
+	add: (socketId: string, groupId: string | number) => void;
+}
+
 /**
  * Interfaces to support
  * res.send

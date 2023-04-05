@@ -21,7 +21,7 @@ export class ApiError extends Error {
 	}
 }
 
-export type Method = 'get' | 'put' | 'patch' | 'post' | 'delete';
+export type Method = 'get' | 'put' | 'patch' | 'post' | 'delete' | 'meta';
 export const store: Record<string | number, WebSocket[]> = {};
 export enum MethodEnum {
 	GET = 0,
@@ -29,6 +29,7 @@ export enum MethodEnum {
 	PUT,
 	PATCH,
 	DELETE,
+	META,
 }
 
 export function parseBrowserMessage(data: WebSocket.Data) {

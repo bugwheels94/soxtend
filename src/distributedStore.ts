@@ -1,5 +1,4 @@
 import { commandOptions, RedisClientType, createClient } from 'redis';
-import { TextDecoder } from 'util';
 import crypto from 'crypto';
 
 export abstract class StorageClass<Client> {
@@ -21,17 +20,21 @@ export abstract class StorageClass<Client> {
 	}
 }
 
-const decoder = new TextDecoder();
 export interface DistributedStore {
 	initialize: (serverId: string) => Promise<void>;
-	sendToGroup: (groupId: string, message: Uint8Array) => void;
-	joinGroup: (groupId: string) => void;
-	sendToIndividual: (channelId: string, message: Uint8Array) => void;
-	listen: (queueId: string, callback: (receiverId: string, message: string) => void) => void;
+	listen: (queueId: string, callback: (receiverId: string, message: Uint8Array) => void) => void;
+	enqueue: (queueId: string, message: Uint8Array) => void;
+	addListItem: (listId: string, item: string) => Promise<any>;
+	getListItems: (listId: string) => Promise<string[]>;
+	set: (key: string, value: string) => Promise<any>;
+	get: (key: string) => Promise<string>;
 }
+
+const decoder = new TextDecoder();
 export class RedisStore implements DistributedStore {
 	redisClient: RedisClientType;
 	private serverId: string;
+	initialized?: boolean;
 	constructor(private url: string) {}
 	async initialize(serverId: string) {
 		this.serverId = serverId;
@@ -42,30 +45,58 @@ export class RedisStore implements DistributedStore {
 		client.on('error', (err) => console.log('Redis Client Error', err));
 
 		await client.connect();
+		this.initialized = true;
 		// @ts-ignore
 		this.redisClient = client;
 	}
 
-	async sendToGroup(channelId: string, message: Uint8Array) {
-		const servers = await this.redisClient.sMembers(`g:${channelId}`);
-		for (let i = 0; i < servers.length; i++) {
-			const server = servers[i];
-			if (this.serverId !== server) this.redisClient.lPush(`g:${server}`, `${channelId}:${decoder.decode(message)}`); // send to the server oin group channel
-		}
+	async addListItem(listId: string, item: string) {
+		return this.redisClient.sAdd(listId, item);
 	}
-	joinGroup(groupId: string) {
-		return this.redisClient.sAdd(`g:${groupId}`, this.serverId);
+	async getListItems(listId: string) {
+		return this.redisClient.sMembers(listId);
 	}
-	async sendToIndividual(channelId: string, message: Uint8Array) {
-		const server = await this.redisClient.get(`i:${channelId}`);
-		this.redisClient.lPush(`i:${server}`, `${channelId}:${decoder.decode(message)}`); // send to the server on individual channel
+	async removeListItem(listId: string, item: string) {
+		return Promise.all([this.redisClient.sRem(listId, item)]);
 	}
-	async listen(channel: string, callback: (_: string, _s: string) => void) {
+
+	async set(key: string, value: string) {
+		return this.redisClient.set(key, value);
+	}
+	async get(key: string) {
+		return this.redisClient.get(key);
+	}
+	async enqueue(queueId: string, message: Uint8Array) {
+		const buffer = message.buffer;
+		const length = buffer.byteLength;
+		this.redisClient.lPush(commandOptions({ returnBuffers: true }), queueId, Buffer.from(buffer, 0, length));
+	}
+	async addIndividualToServer(connectionId: string) {
+		return this.redisClient.set(`i:${connectionId}`, this.serverId);
+	}
+
+	async listen(channel: string, callback: (_: string, _s: Uint8Array) => void) {
+		const redisClient = createClient({
+			url: this.url,
+		});
+		await redisClient.connect();
 		while (true) {
-			const { element: message } = await this.redisClient.blPop(commandOptions({ isolated: true }), channel, 0);
-			const id = message.substring(0, message.indexOf(':'));
-			const remaining = message.substring(message.indexOf(':') + 1);
-			callback(id, remaining);
+			console.log('BLOCKING LIST', channel);
+			try {
+				const pp = redisClient.blPop(commandOptions({ returnBuffers: true }), channel, 0);
+				const { element: message } = await pp;
+				const finalMessage = new Uint8Array(message);
+				console.log('MNESSAGE FOUND', message, finalMessage);
+				const groupLength = finalMessage[0];
+				const id = decoder.decode(finalMessage.subarray(1, 1 + groupLength));
+
+				const remaining = finalMessage.subarray(1 + groupLength, finalMessage.length);
+				console.log('ITEM FOUND', { id, remaining });
+
+				callback(id, remaining);
+			} catch (e) {
+				console.log('OKOK', e);
+			}
 		}
 	}
 }

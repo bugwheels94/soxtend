@@ -2,7 +2,7 @@
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"declaration": true,
-		"declarationDir": "./dist/types/client",
+		"declarationDir": "./dist/types-client",
 		"emitDeclarationOnly": true,
 		"noEmit": false
 	},

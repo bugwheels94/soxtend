@@ -33,17 +33,32 @@
 
 1. Pub/Sub
 
-   1. Each server will have an id named serverId and redis will store {[connectionId]: serverId}.
-   2. Each server will store map of all connectionId to Websocket instance
-   3. Redis will have pub/sub channel equal to serverId
-   4. To send a message to server with serverId just publish message on the channel named serverId
+   1. Each server will have an id named serverId and redis will store
+      connectionId: serverId
+   1. Each server will store map of all connectionId to Websocket instance
+   1. Redis will have pub/sub channel equal to serverId
+   1. To send a message to server with serverId just publish message on the channel named serverId
 
-      (groupId|connectionId):$BrowserMessage
+      Message format: `${(groupId|connectionId):${BrowserMessage}`
 
-   5. Listening server will get the message and send it to proper connection
-   6. Group messaging can be done via a structure SET with (serverId)
-   7. Each server will store groups in nodejs memory {[groupId]: Set<Wrapper<WebSocket>>)}, plus we need {[connectionId]: Wrapper<WebSocket>}
-   8. Message will be prepared once for all the sockets and ideally we should also do one redis call for one message
+      groupId: Set<serverId>
+      connectionId: serverId
+      Above DS can be used to get all servers for a group/connection
+
+   1. Listening server will get the message and send it to proper connection using two data structures
+
+      groupId: Set<Socket>
+      connectionId: Socket
+
+   1. Message will be prepared once for all the sockets and ideally we should also do one redis call for one message
+   1. On Reconnect of socket,
+
+      1. Get all of the groupId from some store stored in below data structure
+         connectionId: Set<groupId>
+
+      2. In #3 add newly connected socket's server Id to the groupId: Set<serverId>
+      3. In #3, replace old serverId with newly connected socket's serverId in connectionId: serverId
+      4. In #4, add current socket to all of the groupId: Set<Socket> and connectionId: Socket
 
 2. Persisting (Blpop, stream, kafka)
 

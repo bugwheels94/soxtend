@@ -7,11 +7,6 @@ export type ClientRequest = {
 	// if the client is supposed to forget the message after delivery to the server so no promise wrapping. less overhead
 	forget?: boolean;
 	id?: never;
-	get?: never;
-	put?: never;
-	patch?: never;
-	delete?: never;
-	post?: never;
 };
 export type ClientPromiseStore = Record<
 	string,
@@ -62,6 +57,9 @@ export class Client {
 	}
 	delete(url: string, options?: ClientRequest) {
 		return this.method(MethodEnum.DELETE, url, options);
+	}
+	meta(url: string, options?: ClientRequest) {
+		return this.method(MethodEnum.META, url, options);
 	}
 	onSocketCreated(socket: WebSocket) {
 		this.socket = socket;

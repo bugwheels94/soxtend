@@ -13,14 +13,15 @@ type WebSocketPlusOptions = {
 type Options = ClientOptions & WebSocketPlusOptions;
 type Events = 'open' | 'close' | 'message' | 'error';
 
-const onSocketCreated = (socket: WebSocket, router: Receiver, client: Client) => {
-	client.onSocketCreated(socket);
+const onSocketCreated = (socket: WebSocket, restifySocket: RestifyWebSocket<X>) => {
+	restifySocket.client.onSocketCreated(socket);
 	socket.addEventListener('message', async ({ data }) => {
 		try {
 			const message = await parseServerMessage(data);
 			console.log('Received', message);
-			router.listener(message);
-			if (client instanceof Client) client.listener(message);
+			restifySocket.lastMessageId = message.messageId;
+			restifySocket.receiver.listener(message);
+			restifySocket.client.listener(message);
 		} catch (e) {
 			console.log('Cannot parse message into JSON!', e, data);
 		}
@@ -30,6 +31,8 @@ const onSocketCreated = (socket: WebSocket, router: Receiver, client: Client) =>
 class RestifyWebSocket<T extends X> {
 	client: Client;
 	receiver: Receiver;
+	lastMessageId?: number;
+	connectionId: string;
 	socket: WebSocket;
 	currentReconnectDelay: number = 100;
 	url: string;
@@ -59,10 +62,19 @@ class RestifyWebSocket<T extends X> {
 		return socket;
 	}
 	onSocketCreated(socket: WebSocket) {
-		onSocketCreated(socket, this.receiver, this.client);
+		onSocketCreated(socket, this);
 	}
 	onWebsocketOpen(options: WebSocketPlusOptions) {
 		this.currentReconnectDelay = options.firstReconnectDelay;
+		console.log('ankit2', this.connectionId);
+		if (this.connectionId) {
+			this.client.meta('/connection', {
+				body: this.connectionId,
+			});
+		} else {
+			this.client.meta('/connection');
+		}
+		if (this.lastMessageId) this.socket;
 	}
 
 	onWebsocketClose(options: WebSocketPlusOptions) {
@@ -105,6 +117,9 @@ class RestifyWebSocket<T extends X> {
 	constructor(urlOrSocket: T, options?: T extends string ? WebSocketPlusOptions : Options) {
 		this.client = new Client();
 		this.receiver = new Receiver();
+		this.receiver.meta('/connection', (_req, res) => {
+			this.connectionId = res.data;
+		});
 		let socket: WebSocket;
 		if (typeof urlOrSocket === 'string') {
 			this.url = urlOrSocket;

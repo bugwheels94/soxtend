@@ -7,13 +7,7 @@ import { DistributedStore } from './distributedStore';
 import { SocketGroupStore, IndividualSocketConnectionStore } from './localStores';
 export type RouterStore = Record<MethodEnum, Route[]>;
 
-export type RouterRequest<P extends object = object> = {
-	requestId?: number;
-	message?: any;
-	method: MethodEnum;
-	url: string;
-	header?: Record<string, string>;
-} & MatchResult<P>;
+export type RouterRequest<P extends object = object> = ReturnType<typeof parseBrowserMessage> & MatchResult<P>;
 type SendMessageFromServerOptions = {
 	method?: Method;
 	headers?: Record<string, string | number>;
@@ -27,7 +21,7 @@ const temp = {
 	patch: MethodEnum.PATCH,
 	delete: MethodEnum.DELETE,
 };
-function createResponse(
+export function createResponse(
 	type: 'self' | 'group' | 'individual',
 	message: ReturnType<typeof parseBrowserMessage>,
 	instance: Socket | string,
@@ -66,19 +60,22 @@ function createResponse(
 		},
 		send: function (data: any, options: SendMessageFromServerOptions = {}) {
 			const finalMessage = createMessageForBrowser(
-				options.url || message.url,
+				options.url === undefined ? message.url : options.url,
 				options.method === undefined ? message.method : temp[options.method],
 				options.headers || this.headers,
 				options.status === undefined ? this._status : options.status,
 				type === 'self' ? message.requestId : undefined,
 				data
 			);
-			if (type === 'group' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
-			else if (type === 'individual' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
+			if (type === 'group' && typeof instance === 'string') {
+				console.log('pushing to redis', message, options);
+				router.sendToGroup(instance, finalMessage);
+			} else if (type === 'individual' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
 			else if (type === 'self' && instance instanceof Socket) instance.send(finalMessage);
 		},
 	};
 }
+export type RouterResponse = ReturnType<typeof createResponse>;
 export type RouterCallback<P extends object = object> = (
 	request: RouterRequest<P>,
 	response: ReturnType<typeof createResponse>
@@ -90,52 +87,84 @@ export type Route = {
 };
 
 type Params = Record<string, string>;
+const decoder = new TextDecoder();
+
 const encoder = new TextEncoder();
 export class Router {
-	store: RouterStore = {
+	requestStore: RouterStore = {
 		[MethodEnum.GET]: [],
 		[MethodEnum.PUT]: [],
 		[MethodEnum.POST]: [],
 		[MethodEnum.PATCH]: [],
 		[MethodEnum.DELETE]: [],
+		[MethodEnum.META]: [],
 	};
-	constructor(private serverId: string, private distributedStore?: DistributedStore) {
+	constructor(private serverId: string, private store?: DistributedStore) {
 		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
 		this.socketGroupStore = new SocketGroupStore();
 		this.listenToIndividualQueue(`i:${this.serverId}`);
-		this.listenToGroupQueue(`g:${this.serverId}`);
+		this.listenToGroupQueue(`server-messages:${this.serverId}`);
 	}
 	individualSocketConnectionStore: IndividualSocketConnectionStore;
 
 	socketGroupStore: SocketGroupStore;
 	async listenToIndividualQueue(queueName: string) {
 		// `i:${serverId}`
-		if (!this.distributedStore) return;
-		this.distributedStore.listen(queueName, (connectionId: string, message: string) => {
-			this.individualSocketConnectionStore.find(connectionId).send(encoder.encode(message));
+		if (!this.store) return;
+		this.store.listen(queueName, (connectionId: string, message: Uint8Array) => {
+			this.individualSocketConnectionStore.find(connectionId).send(message);
 		});
 	}
 	async listenToGroupQueue(queueName: string) {
 		// `g:${serverId}`
-		if (!this.distributedStore) return;
-		this.distributedStore.listen(queueName, (groupId: string, message: string) => {
-			this.socketGroupStore.find(groupId).forEach((socket) => {
-				socket.send(encoder.encode(message));
+		if (!this.store) return;
+		console.log('Listening to Queue', queueName);
+		this.store.listen(queueName, (groupId: string, message: Uint8Array) => {
+			console.log('New message received on queue', this.serverId);
+			this.socketGroupStore.find(groupId)?.forEach((socket) => {
+				console.log('Popped Redis', message);
+				socket.send(message);
 			});
 		});
 	}
 	async sendToGroup(id: string, message: Uint8Array) {
-		this.socketGroupStore.find(id).forEach((socket) => {
-			socket.send(message);
-		});
-		if (!this.distributedStore) return;
-		this.distributedStore.sendToGroup(id, message);
+		console.log('a', this.socketGroupStore, id);
+
+		// this.socketGroupStore.find(id)?.forEach((socket) => {
+		// 	socket.send(message);
+		// });
+		if (!this.store) return;
+
+		const servers = await this.store.getListItems(`group-servers:${id}`);
+		const groupArray = encoder.encode(id);
+		const messageWithGroupId = new Uint8Array(message.length + 1 + groupArray.length);
+		messageWithGroupId[0] = groupArray.length;
+		messageWithGroupId.set(groupArray, 1);
+		messageWithGroupId.set(message, 1 + groupArray.length);
+		console.log('Found servers for publishing to groups', servers);
+		console.log('pushing in array format', messageWithGroupId);
+		for (let i = 0; i < servers.length; i++) {
+			const server = servers[i];
+			this.store.enqueue(`server-messages:${server}`, messageWithGroupId); // send to the server oin group channel
+		}
 	}
 	async joinGroup(id: string, socket: Socket) {
 		this.socketGroupStore.add(socket, id);
-		socket.groups.add(id);
-		if (!this.distributedStore) return;
-		this.distributedStore.joinGroup(id);
+		socket.groups.add(id); // remove it and use store methods only so in absence of distributedstore use localstore or something
+		if (!this.store) return undefined;
+		return Promise.all([
+			this.store.addListItem(`my-groups:${socket.id}`, id),
+			this.store.addListItem(`group-servers:${id}`, this.serverId),
+		]);
+	}
+	async joinGroups(socket: Socket, groupdIds: string[]) {
+		groupdIds.forEach((groupId) => {
+			this.socketGroupStore.add(socket, groupId);
+			if (this.store) this.store.addListItem(`group-servers:${groupId}`, this.serverId);
+		});
+	}
+	async getGroups(connectionId: string) {
+		return this.store.getListItems(`my-groups:${connectionId}`);
 	}
 	async sendToIndividual(id: string, message: Uint8Array) {
 		const socket = this.individualSocketConnectionStore.find(id);
@@ -143,11 +172,19 @@ export class Router {
 			socket.send(message);
 			return;
 		}
-		if (!this.distributedStore) return;
-		this.distributedStore.sendToIndividual(id, message);
+		if (!this.store) return;
+
+		const server = await this.store.get(`i:${id}`);
+		const groupArray = encoder.encode(id);
+		const messageWithGroupId = new Uint8Array(message.length + 1 + groupArray.length);
+		messageWithGroupId[0] = groupArray.length;
+		messageWithGroupId.set(groupArray, 1);
+		messageWithGroupId.set(message, 1 + groupArray.length);
+		this.store.enqueue(`i:${server}`, messageWithGroupId);
 	}
 	registerRoute(method: MethodEnum, url: string, ...callbacks: RouterCallback[]) {
-		this.store[method].push({
+		console.log('pushing');
+		this.requestStore[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
 			callbacks,
@@ -168,11 +205,15 @@ export class Router {
 	delete<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute(MethodEnum.DELETE, url, ...callbacks);
 	}
+	meta<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
+		console.log('registering');
+		this.registerRoute(MethodEnum.META, url, ...callbacks);
+	}
 	async listener(message: ReturnType<typeof parseBrowserMessage>, mySocket: Socket) {
 		// Message is coming from router to client and execution should be skipped
 		let store: RouterStore[MethodEnum.GET];
 		let method: MethodEnum = message.method;
-		store = this.store[method];
+		store = this.requestStore[method];
 		/**
 		 * Response usage
 		 *

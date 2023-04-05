@@ -4,11 +4,11 @@
 	"description": "Websockets on steroid",
 	"exports": {
 		"./server": {
-			"types": "./dist/types/index.d.ts",
+			"types": "./dist/types-server/index.d.ts",
 			"import": "./dist/server/index.js"
 		},
 		"./client": {
-			"types": "./dist/types/client/client/index.d.ts",
+			"types": "./dist/types-client/client/index.d.ts",
 			"import": "./dist/client/index.js"
 		}
 	},
@@ -43,7 +43,7 @@
 	"author": "bugwheels94",
 	"license": "ISC",
 	"peerDependencies": {
-		"redis": "^4.5.1"
+		"redis": "^4.6.5"
 	},
 	"devDependencies": {
 		"@babel/plugin-proposal-decorators": "^7.17.9",

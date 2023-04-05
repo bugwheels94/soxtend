@@ -33,6 +33,7 @@ export class Receiver {
 		[MethodEnum.PUT]: [],
 		[MethodEnum.PATCH]: [],
 		[MethodEnum.DELETE]: [],
+		[MethodEnum.META]: [],
 	};
 	registerRoute(method: MethodEnum, url: string, ...callbacks: ReceiverCallback[]) {
 		this.store[method].push({
@@ -55,6 +56,9 @@ export class Receiver {
 	}
 	delete<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute(MethodEnum.DELETE, url, ...callbacks);
+	}
+	meta<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.registerRoute(MethodEnum.META, url, ...callbacks);
 	}
 	async listener(message: Awaited<ReturnType<typeof parseServerMessage>>) {
 		// Message is coming from router to client and execution should be skipped

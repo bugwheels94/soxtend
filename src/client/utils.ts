@@ -30,17 +30,20 @@ export enum MethodEnum {
 	PUT,
 	PATCH,
 	DELETE,
+	META,
 }
 
 export async function parseServerMessage(data: WebSocket.Data) {
 	if (!(data instanceof Blob)) return null;
 	const ui8 = new Uint8Array(await data.arrayBuffer());
 	let index = 3;
+	console.log(decoder.decode(ui8), 'ok', ui8);
 	const messageId = ui8[0] * 255 * 255 + ui8[1] * 255 + ui8[2];
 	const method = ui8[index++];
 	const isRespondingToPreviousMessage = ui8[index++];
 	const status = ui8[index++] * 255 + ui8[index++];
 	const isHeaderPresent = ui8[index++];
+	console.log('Read header at', index);
 	let respondingMessageId: number | undefined;
 	if (isRespondingToPreviousMessage) {
 		respondingMessageId = ui8[index++] * 255 + ui8[index++];
@@ -50,8 +53,13 @@ export async function parseServerMessage(data: WebSocket.Data) {
 	index += urlLength;
 
 	let header: Record<string, string>;
+	console.log({
+		isHeaderPresent,
+	});
 	if (isHeaderPresent) {
 		const headerLength = ui8[index++] * 255 + ui8[index++];
+		console.log('parsing json', decoder.decode(ui8.subarray(index, index + headerLength)));
+
 		header = JSON.parse(decoder.decode(ui8.subarray(index, index + headerLength)));
 		index += headerLength;
 	}
