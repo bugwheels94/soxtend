@@ -1,6 +1,6 @@
 import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
-import { MessageStore } from './storageAdapter';
+// import { MessageStore } from './messageStore';
 import crypto from 'crypto';
 export type ClientResponse = {
 	_id: number;
@@ -30,7 +30,7 @@ export type ClientPromiseStore = Record<
 export class Socket {
 	id: string;
 	socket: WebSocket;
-	store?: MessageStore | undefined;
+	// store?: MessageStore | undefined;
 	groups: Set<string> = new Set();
 	lastMessageId = 0;
 	send(data: Uint8Array) {
@@ -43,9 +43,9 @@ export class Socket {
 		data[0] = id & 255;
 
 		socket = this.socket;
-		if (this.store) {
-			this.store.insert(this.id, [[this.lastMessageId + '-0', data]]);
-		}
+		// if (this.store) {
+		// 	this.store.insert(this.id, [[this.lastMessageId + '-0', data]]);
+		// }
 
 		// inject code for insert into reconnect queue here
 		// 1. Save locally for 5 seconds(configurable)
@@ -57,9 +57,12 @@ export class Socket {
 	setId(id: string) {
 		this.id = id;
 	}
-	constructor(socket: WebSocket, store?: MessageStore) {
+	constructor(
+		socket: WebSocket
+		// , store?: MessageStore
+	) {
 		this.socket = socket;
-		this.store = store;
+		// this.store = store;
 		this.id = crypto.randomUUID();
 	}
 }

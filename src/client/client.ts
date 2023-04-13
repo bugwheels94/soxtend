@@ -26,19 +26,17 @@ export class Client {
 		let socket: WebSocket, message: Uint8Array;
 		const { forget, ...remaining } = options;
 		let id: number | undefined;
-		if (!forget) {
-			this.id += 1;
-			id = this.id;
-		}
+		this.id += 1;
+		id = this.id;
 		message = createMessageForServer(url, method, id, remaining);
 		socket = this.socket;
-		console.log('Sent', { url, method, id, ...remaining });
 
 		if (socket.CONNECTING === socket.readyState) {
 			this.pendingMessageStore.push(message);
 		} else {
 			socket.send(message);
 		}
+		if (forget) return null;
 		return new Promise<ParsedServerMessage>((resolve, reject) => {
 			this.promiseStore[this.id] = { resolve, reject };
 		});
@@ -71,8 +69,9 @@ export class Client {
 	async listener(message: ParsedServerMessage) {
 		// Message is coming from client to router and execution should be skipped
 		if (message.respondingMessageId === undefined) return;
+		// @ts-ignore
+		window.ankit = this.promiseStore;
 		if (message.status < 300) {
-			console.log(Object.keys(this.promiseStore), message.respondingMessageId);
 			this.promiseStore[message.respondingMessageId].resolve(message);
 		} else if (message.status >= 300) {
 			this.promiseStore[message.respondingMessageId].reject(message);

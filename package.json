@@ -60,6 +60,7 @@
 		"@types/ws": "^8.5.3",
 		"babel-plugin-const-enum": "^1.2.0",
 		"cross-env": "^7.0.3",
+		"cz-conventional-changelog": "^3.3.0",
 		"fast-glob": "^3.2.11",
 		"husky": "^7.0.4",
 		"lint-staged": "^12.3.7",

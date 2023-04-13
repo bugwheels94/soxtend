@@ -18,7 +18,6 @@ const onSocketCreated = (socket: WebSocket, restifySocket: RestifyWebSocket<X>) 
 	socket.addEventListener('message', async ({ data }) => {
 		try {
 			const message = await parseServerMessage(data);
-			console.log('Received', message);
 			restifySocket.lastMessageId = message.messageId;
 			restifySocket.receiver.listener(message);
 			restifySocket.client.listener(message);
@@ -66,13 +65,18 @@ class RestifyWebSocket<T extends X> {
 	}
 	onWebsocketOpen(options: WebSocketPlusOptions) {
 		this.currentReconnectDelay = options.firstReconnectDelay;
-		console.log('ankit2', this.connectionId);
 		if (this.connectionId) {
-			this.client.meta('/connection', {
-				body: this.connectionId,
-			});
+			this.client
+				.meta('/connection', {
+					body: this.connectionId,
+				})
+				.then((res) => {
+					this.connectionId = res.data;
+				});
 		} else {
-			this.client.meta('/connection');
+			this.client.meta('/connection').then((res) => {
+				this.connectionId = res.data;
+			});
 		}
 		if (this.lastMessageId) this.socket;
 	}
@@ -117,9 +121,6 @@ class RestifyWebSocket<T extends X> {
 	constructor(urlOrSocket: T, options?: T extends string ? WebSocketPlusOptions : Options) {
 		this.client = new Client();
 		this.receiver = new Receiver();
-		this.receiver.meta('/connection', (_req, res) => {
-			this.connectionId = res.data;
-		});
 		let socket: WebSocket;
 		if (typeof urlOrSocket === 'string') {
 			this.url = urlOrSocket;

@@ -3,8 +3,8 @@ import { Socket } from './client';
 import { Router } from './router';
 import { ServerOptions } from 'ws';
 import crypto from 'crypto';
-import { DistributedStore, RedisStore } from './distributedStore';
-import { MessageStore } from './storageAdapter';
+import { MessageDistributor, RedisMessageDistributor, InMemoryMessageDistributor } from './distributor';
+// import { MessageStore } from './messageStore';
 import { MethodEnum, parseBrowserMessage } from './utils';
 import EventEmitter from 'events';
 type RestifyServerEvents = 'connection' | 'close';
@@ -38,7 +38,6 @@ const onServerSocketCreated = (socket: Socket, router: Router) => {
 				} else {
 					socket.setId(crypto.randomUUID());
 					onServerSocketInitialized(socket, router);
-					console.log('wow', parsedData);
 					router.listener(parsedData, socket);
 				}
 			}
@@ -70,25 +69,23 @@ export class RestifyWebSocketServer extends EventEmitter {
 	};
 	constructor(
 		options: ServerOptions & {
-			distributedStore?: DistributedStore;
-			messageStore?: MessageStore;
+			distributor?: MessageDistributor;
+			// messageStore?: MessageStore;
 		}
 	) {
 		super();
-		const { distributedStore } = options;
+		const { distributor } = options;
 		this.serverId = crypto.randomUUID();
 
 		Promise.all([
-			options.distributedStore ? options.distributedStore.initialize(this.serverId) : undefined,
-			options.messageStore ? options.messageStore.initialize(this.serverId) : undefined,
+			options.distributor ? options.distributor.initialize(this.serverId) : undefined,
+			// options.messageStore ? options.messageStore.initialize(this.serverId) : undefined,
 		])
 			.then(() => {
-				console.log('Stores Initialized!');
 				this.rawWebSocketServer = new WebSocket.Server(options);
 
-				this.router = new Router(this.serverId, distributedStore);
+				this.router = new Router(this.serverId, distributor);
 				this.router.meta('/connection', async (req, res) => {
-					console.log('hahah');
 					if (!req.body) {
 						// @ts-ignore
 						return res.send(res.socket.id, {
@@ -99,11 +96,9 @@ export class RestifyWebSocketServer extends EventEmitter {
 					// @ts-ignore
 					res.socket.setId(req.body);
 				});
-				console.log('emitting ready!');
 				this.emit('ready');
 				this.on('connection', (rawSocket) => {
-					console.log('New Connection!');
-					const socket = new Socket(rawSocket, options.messageStore);
+					const socket = new Socket(rawSocket);
 					onServerSocketCreated(socket, this.router);
 					const connectionEvents = this.eventStore['connection'] || [];
 					connectionEvents.forEach(({ listener }) => {
@@ -133,5 +128,4 @@ export class RestifyWebSocketServer extends EventEmitter {
 	router: Router;
 }
 export type { RouterRequest, Router, RouterResponse } from './router';
-export { RedisMessageStore } from './storageAdapter';
-export { RedisStore };
+export { RedisMessageDistributor, InMemoryMessageDistributor };

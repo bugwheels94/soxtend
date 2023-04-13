@@ -16,7 +16,7 @@ export type ReceiverResponse = {
 export type ReceiverCallback<P extends object = object> = (
 	request: ReceiverRequest<P>,
 	response: ReceiverResponse
-) => void;
+) => Promise<void> | void;
 export type ReceiverRoute = {
 	literalRoute: string;
 	match: MatchFunction<any>;

@@ -70,14 +70,7 @@ export function parseBrowserMessage(data: WebSocket.Data) {
 		if (dataType === DataType.TEXT) message = decoder.decode(rawData);
 		if (dataType === DataType.BINARY) message = rawData;
 	} catch (e) {
-		const str = decoder.decode(rawData);
-		console.log(
-			'WOWOW',
-			`<>${str}<>`,
-			{ method, isHeaderPresent, isIdPresent, url, urlLength },
-			{ 16: str[16], 17: str[17], 18: str[18], 19: str[19], 20: str[20], 21: str[21], 22: str[22] },
-			e
-		);
+		console.log(e);
 	}
 	return {
 		requestId,
