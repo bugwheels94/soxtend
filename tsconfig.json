@@ -4,7 +4,7 @@
 		"target": "es2021",
 		"outDir": "dist",
 		"rootDir": "src",
-		"moduleResolution": "node",
+		"moduleResolution": "node16",
 		"module": "es2015",
 		"declaration": true,
 		"inlineSourceMap": true,
@@ -27,7 +27,7 @@
 		// "experimentalDecorators": true /* Enables experimental support for ES7 decorators. */,
 		// "emitDecoratorMetadata": true /* Enables experimental support for emitting type metadata for decorators. */,
 
-		"lib": ["esnext"],
+		"lib": ["esnext", "dom"],
 		"types": ["node"],
 		"typeRoots": ["@types", "src/types"]
 	},
