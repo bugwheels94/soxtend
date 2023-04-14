@@ -9,4 +9,3 @@ export interface MessageDistributor {
 }
 
 export { InMemoryMessageDistributor } from './inMemory';
-export { RedisMessageDistributor } from './redis';

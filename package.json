@@ -6,11 +6,19 @@
 		"./server": {
 			"types": "./dist/types-server/index.d.ts",
 			"import": "./dist/esm/server/index.js",
+			"default": "./dist/esm/server/index.js",
 			"require": "./dist/cjs/server/index.js"
+		},
+		"./redis-distributor": {
+			"types": "./dist/types-server/distributor/redis.d.ts",
+			"import": "./dist/esm/server/distributor/redis.js",
+			"default": "./dist/esm/server/distributor/redis.js",
+			"require": "./dist/cjs/server/distributor/redis.js"
 		},
 		"./client": {
 			"types": "./dist/types-client/client/index.d.ts",
 			"import": "./dist/esm/client/index.js",
+			"default": "./dist/esm/client/index.js",
 			"require": "./dist/cjs/client/index.js"
 		}
 	},
