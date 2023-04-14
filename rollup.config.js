@@ -24,13 +24,18 @@ const isPackageDependency = (pkg, path, importer = '') => {
 	);
 };
 const getRollupConfig =
-	({ isBrowser = false } = {}) =>
+	({ isBrowser = false, format = 'esm' } = { isBrowser: false, format: 'esm' }) =>
 	(input) => {
 		return {
 			input,
 			output: {
-				file: path.join('./dist', isBrowser ? '' : 'server', input.replace('/src', '').replace(/\.(tsx|ts)/, '.js')),
-				format: 'esm',
+				file: path.join(
+					'./dist',
+					format,
+					isBrowser ? '' : 'server',
+					input.replace('/src', '').replace(/\.(tsx|ts)/, '.js')
+				),
+				format,
 			},
 			external(id, second = '') {
 				const sanitizedId = id.split('?')[0];
@@ -82,4 +87,10 @@ const getRollupConfig =
 			],
 		};
 	};
-export default [...configs.map(getRollupConfig()), ...configsBrowser.map(getRollupConfig({ isBrowser: true }))];
+export default [
+	...configs.map(getRollupConfig()),
+	...configs.map(getRollupConfig({ format: 'cjs' })),
+	...configs.map(getRollupConfig({ isBrowser: true, format: 'cjs' })),
+
+	...configsBrowser.map(getRollupConfig({ isBrowser: true })),
+];
