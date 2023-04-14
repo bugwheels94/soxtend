@@ -53,12 +53,14 @@
    1. Message will be prepared once for all the sockets and ideally we should also do one redis call for one message
    1. On Reconnect of socket,
 
+      1. Browser will send a message with connectionId to the server
+
       1. Get all of the groupId from some store stored in below data structure
          connectionId: Set<groupId>
 
-      2. In #3 add newly connected socket's server Id to the groupId: Set<serverId>
-      3. In #3, replace old serverId with newly connected socket's serverId in connectionId: serverId
-      4. In #4, add current socket to all of the groupId: Set<Socket> and connectionId: Socket
+      1. In #3 add newly connected socket's server Id to the groupId: Set<serverId>
+      1. In #3, replace old serverId with newly connected socket's serverId in connectionId: serverId
+      1. In #4, add current socket to all of the groupId: Set<Socket> and connectionId: Socket
 
 2. Persisting (Blpop, stream, kafka)
 

@@ -5,11 +5,13 @@
 	"exports": {
 		"./server": {
 			"types": "./dist/types-server/index.d.ts",
-			"import": "./dist/server/index.js"
+			"import": "./dist/esm/server/index.js",
+			"require": "./dist/cjs/server/index.js"
 		},
 		"./client": {
 			"types": "./dist/types-client/client/index.d.ts",
-			"import": "./dist/client/index.js"
+			"import": "./dist/esm/client/index.js",
+			"require": "./dist/cjs/client/index.js"
 		}
 	},
 	"files": [
