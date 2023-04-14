@@ -33,7 +33,7 @@ const getRollupConfig =
 					'./dist',
 					format,
 					isBrowser ? '' : 'server',
-					input.replace('/src', '').replace(/\.(tsx|ts)/, '.js')
+					input.replace('/src', '').replace(/\.(tsx|ts)/, format === 'cjs' ? '.cjs' : '.js')
 				),
 				format,
 			},

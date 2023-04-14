@@ -3,7 +3,7 @@ import { Socket } from './client';
 import { Router } from './router';
 import { ServerOptions } from 'ws';
 import crypto from 'crypto';
-import { MessageDistributor, RedisMessageDistributor, InMemoryMessageDistributor } from './distributor';
+import { MessageDistributor, InMemoryMessageDistributor } from './distributor';
 // import { MessageStore } from './messageStore';
 import { MethodEnum, parseBrowserMessage } from './utils';
 import EventEmitter from 'events';
@@ -128,4 +128,4 @@ export class RestifyWebSocketServer extends EventEmitter {
 	router: Router;
 }
 export type { RouterRequest, Router, RouterResponse } from './router';
-export { RedisMessageDistributor, InMemoryMessageDistributor };
+export { InMemoryMessageDistributor };
