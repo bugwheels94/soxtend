@@ -69,8 +69,6 @@ export class Client {
 	async listener(message: ParsedServerMessage) {
 		// Message is coming from client to router and execution should be skipped
 		if (message.respondingMessageId === undefined) return;
-		// @ts-ignore
-		window.ankit = this.promiseStore;
 		if (message.status < 300) {
 			this.promiseStore[message.respondingMessageId].resolve(message);
 		} else if (message.status >= 300) {

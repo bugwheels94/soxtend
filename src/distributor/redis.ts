@@ -24,11 +24,17 @@ export class RedisMessageDistributor implements MessageDistributor {
 	async addListItem(listId: string, item: string) {
 		return this.redisClient.sAdd(listId, item);
 	}
+	async addListItems(listId: string, item: string[]) {
+		return this.redisClient.sAdd(listId, item);
+	}
 	async getListItems(listId: string) {
 		return this.redisClient.sMembers(listId);
 	}
 	async removeListItem(listId: string, item: string) {
-		return Promise.all([this.redisClient.sRem(listId, item)]);
+		return this.redisClient.sRem(listId, item);
+	}
+	async removeListItems(listId: string, item: string[]) {
+		return this.redisClient.sRem(listId, item);
 	}
 
 	async set(key: string, value: string) {

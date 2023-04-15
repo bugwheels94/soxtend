@@ -1,4 +1,4 @@
-import { MethodEnum, parseServerMessage } from './utils';
+import { Method, MethodEnum, parseServerMessage } from './utils';
 import { match, MatchFunction, MatchResult } from 'path-to-regexp';
 export type ReceiverStore = Record<MethodEnum, ReceiverRoute[]>;
 
@@ -27,6 +27,8 @@ export type ReceiverRequest<P extends object = object> = {} & MatchResult<P>;
 type Params = Record<string, string>;
 
 export class Receiver {
+	chainName: string | null = null;
+	chainInfo: Record<string, any[]> = {};
 	store: ReceiverStore = {
 		[MethodEnum.GET]: [],
 		[MethodEnum.POST]: [],
@@ -36,11 +38,30 @@ export class Receiver {
 		[MethodEnum.META]: [],
 	};
 	registerRoute(method: MethodEnum, url: string, ...callbacks: ReceiverCallback[]) {
+		if (this.chainName) {
+			this.chainInfo[this.chainName].push({
+				method,
+				callbacks,
+			});
+		}
 		this.store[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
 			callbacks,
 		});
+	}
+	startChainedRoutes(chainName: string) {
+		this.chainName = chainName;
+		this.chainInfo[this.chainName] = [];
+	}
+	endChainedRoutes() {
+		this.chainName = null;
+	}
+	clearChain(chainName: string) {
+		this.chainInfo[chainName]?.forEach((route) => {
+			this.store[route.method] = this.store[route.method].filter((r: ReceiverRoute) => r.callbacks !== route.callbacks);
+		});
+		delete this.chainInfo[chainName];
 	}
 	get<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute(MethodEnum.GET, url, ...callbacks);
@@ -60,8 +81,17 @@ export class Receiver {
 	meta<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.registerRoute(MethodEnum.META, url, ...callbacks);
 	}
+	removeListener(method: Method, callback: ReceiverCallback) {
+		this.store[method] = this.store[method].map((route: ReceiverRoute) => {
+			if (route.callbacks.includes(callback)) {
+				route.callbacks = route.callbacks.filter((c) => c !== callback);
+			}
+			return route;
+		});
+	}
 	async listener(message: Awaited<ReturnType<typeof parseServerMessage>>) {
 		// Message is coming from router to client and execution should be skipped
+		if (message.respondingMessageId) return;
 		let store: ReceiverStore[MethodEnum.GET] = this.store[message.method];
 		try {
 			for (let i = 0; i < store.length; i += 1) {

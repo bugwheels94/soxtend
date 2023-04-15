@@ -33,7 +33,7 @@ const onServerSocketCreated = (socket: Socket, router: Router) => {
 				if (connectionId) {
 					socket.setId(connectionId);
 					const groups = await router.getGroups(connectionId);
-					router.joinGroups(socket, groups);
+					router.joinGroups(groups, socket);
 					onServerSocketInitialized(socket, router);
 				} else {
 					socket.setId(crypto.randomUUID());
