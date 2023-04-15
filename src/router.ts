@@ -32,8 +32,17 @@ export function createResponse(
 	return {
 		...(instance instanceof Socket
 			? {
-					joinGroup: (groupId: string) => {
-						router.joinGroup(groupId, instance);
+					joinGroup: async (groupId: string) => {
+						return router.joinGroup(groupId, instance);
+					},
+					leaveGroup: async (groupId: string) => {
+						return router.leaveGroup(groupId, instance);
+					},
+					leaveGroups: async (groups: string[]) => {
+						return router.leaveGroups(groups, instance);
+					},
+					leaveAllGroups: async () => {
+						return router.leaveAllGroups(instance);
 					},
 			  }
 			: {}),
@@ -72,6 +81,7 @@ export function createResponse(
 				router.sendToGroup(instance, finalMessage);
 			} else if (type === 'individual' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
 			else if (type === 'self' && instance instanceof Socket) instance.send(finalMessage);
+			return this;
 		},
 	};
 }
@@ -127,7 +137,6 @@ export class Router {
 		// this.socketGroupStore.find(id)?.forEach((socket) => {
 		// 	socket.send(message);
 		// });
-		if (!this.store) return;
 
 		const servers = await this.store.getListItems(`group-servers:${id}`);
 		const groupArray = encoder.encode(id);
@@ -141,18 +150,37 @@ export class Router {
 	}
 	async joinGroup(id: string, socket: Socket) {
 		this.socketGroupStore.add(socket, id);
-		socket.groups.add(id); // remove it and use store methods only so in absence of MessageDistributor use localstore or something
 		if (!this.store) return undefined;
 		return Promise.all([
 			this.store.addListItem(`my-groups:${socket.id}`, id),
 			this.store.addListItem(`group-servers:${id}`, this.serverId),
 		]);
 	}
-	async joinGroups(socket: Socket, groupdIds: Iterable<string>) {
+	async joinGroups(groupdIds: Iterable<string>, socket: Socket) {
 		for (let groupId of groupdIds) {
 			this.socketGroupStore.add(socket, groupId);
-			if (this.store) this.store.addListItem(`group-servers:${groupId}`, this.serverId);
+			this.store.addListItem(`group-servers:${groupId}`, this.serverId);
 		}
+		this.store.addListItems(`my-groups:${socket.id}`, groupdIds);
+	}
+	async leaveGroup(groupId: string, socket: Socket) {
+		this.socketGroupStore.remove(socket, groupId);
+
+		return this.store.removeListItem(`my-groups:${socket.id}`, groupId);
+	}
+	async leaveAllGroups(socket: Socket) {
+		const groups = await this.store.getListItems(`my-groups:${socket.id}`);
+		for (let group of groups) {
+			this.socketGroupStore.remove(socket, group);
+		}
+		this.store.removeListItems(`my-groups:${socket.id}`, groups);
+	}
+	async leaveGroups(groups: string[], socket: Socket) {
+		for (let group of groups) {
+			this.socketGroupStore.remove(socket, group);
+		}
+
+		return Promise.all([this.store.removeListItems(`my-groups:${socket.id}`, groups)]);
 	}
 	async getGroups(connectionId: string) {
 		return this.store.getListItems(`my-groups:${connectionId}`);

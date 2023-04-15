@@ -16,11 +16,24 @@ export class InMemoryMessageDistributor implements MessageDistributor {
 		if (this.list.has(listId)) this.list.get(listId).add(item);
 		else this.list.set(listId, new Set([item]));
 	}
+	async addListItems(listId: string, items: Iterable<string>) {
+		if (!this.list.has(listId)) this.list.set(listId, new Set());
+		const list = this.list.get(listId);
+		for (const item of items) list.add(item);
+	}
 	async getListItems(listId: string) {
 		return this.list.get(listId) || [];
 	}
 	async removeListItem(listId: string, item: string) {
 		return this.list.get(listId)?.delete(item);
+	}
+	async removeListItems(listId: string, items: string[]) {
+		if (!this.list.has(listId)) return;
+		const list = this.list.get(listId);
+		for (const item of items) list.delete(item);
+	}
+	async removeList(listId: string) {
+		return this.list.delete(listId);
 	}
 
 	async set(key: string, value: string) {
