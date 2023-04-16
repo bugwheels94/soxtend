@@ -7,8 +7,9 @@ import replace from '@rollup/plugin-replace';
 import globby from 'fast-glob';
 import path from 'path';
 const extensions = ['.js', '.ts'];
-const babelIncludes = ['./src/**/*'];
-const configs = globby.sync(['./src/**', '!./src/**.json']);
+const babelIncludes = ['./src/**/*', './client/**/*'];
+const configs = globby.sync(['./src/**', '!./src/**.json', '!./src/client/**']);
+const configsBrowser = globby.sync(['./src/client/**', '!./src/client/**.json']);
 const bundleNpmWorkspacePackages = [];
 const bundlePackages = ['path-to-regexp'];
 const neverBundlePackages = [];
@@ -23,17 +24,18 @@ const isPackageDependency = (pkg, path, importer = '') => {
 	);
 };
 const getRollupConfig =
-	({ isBrowser = false } = {}) =>
+	({ isBrowser = false, format = 'esm' } = { isBrowser: false, format: 'esm' }) =>
 	(input) => {
 		return {
 			input,
 			output: {
 				file: path.join(
 					'./dist',
-					isBrowser ? 'browser' : 'node',
-					input.replace('/src', '').replace(/\.(tsx|ts)/, '.js')
+					format,
+					isBrowser ? '' : 'server',
+					input.replace('/src', '').replace(/\.(tsx|ts)/, format === 'cjs' ? '.cjs' : '.js')
 				),
-				format: 'esm',
+				format,
 			},
 			external(id, second = '') {
 				const sanitizedId = id.split('?')[0];
@@ -69,9 +71,10 @@ const getRollupConfig =
 					'process.env.NODE_ENV': `'${process.env.NODE_ENV}'`,
 				}),
 				json(),
+
 				resolve({
 					extensions,
-					browser: isBrowser ? 'browser' : 'node',
+					browser: isBrowser ? true : false,
 				}),
 				commonjs(),
 				babel({
@@ -79,8 +82,15 @@ const getRollupConfig =
 					babelHelpers: 'runtime',
 					include: babelIncludes,
 				}),
+
 				peerDepsExternal(),
 			],
 		};
 	};
-export default [...configs.map(getRollupConfig()), ...configs.map(getRollupConfig({ isBrowser: true }))];
+export default [
+	...configs.map(getRollupConfig()),
+	...configs.map(getRollupConfig({ format: 'cjs' })),
+	...configs.map(getRollupConfig({ isBrowser: true, format: 'cjs' })),
+
+	...configsBrowser.map(getRollupConfig({ isBrowser: true })),
+];
