@@ -13,20 +13,6 @@ type WebSocketPlusOptions = {
 type Options = ClientOptions & WebSocketPlusOptions;
 type Events = 'open' | 'close' | 'message' | 'error';
 
-const onSocketCreated = (socket: WebSocket, restifySocket: RestifyWebSocket<X>) => {
-	restifySocket.client.onSocketCreated(socket);
-	socket.addEventListener('message', async ({ data }) => {
-		try {
-			const message = await parseServerMessage(data);
-			restifySocket.lastMessageId = message.messageId;
-			restifySocket.receiver.listener(message);
-			restifySocket.client.listener(message);
-		} catch (e) {
-			console.log('Cannot parse message into JSON!', e, data);
-		}
-	});
-};
-
 class RestifyWebSocket<T extends X> {
 	client: Client;
 	receiver: Receiver;
@@ -52,19 +38,30 @@ class RestifyWebSocket<T extends X> {
 			// @ts-ignore
 			socket.addEventListener(event, eventEntry.listener, eventEntry.options);
 		}
-
-		socket.addEventListener('open', () => this.onWebsocketOpen({ firstReconnectDelay, maxReconnectDelay }));
+		socket.addEventListener('open', () => this.onWebsocketOpen({ socket, firstReconnectDelay, maxReconnectDelay }));
 		socket.addEventListener('close', () =>
-			this.onWebsocketClose({ ...nativeOptions, firstReconnectDelay, maxReconnectDelay })
+			this.onWebsocketClose({ ...nativeOptions, firstReconnectDelay, maxReconnectDelay, socket })
 		);
-		this.onSocketCreated(socket);
 		return socket;
 	}
 	onSocketCreated(socket: WebSocket) {
-		onSocketCreated(socket, this);
+		this.client.onSocketCreatedMeta(socket);
+
+		socket.addEventListener('message', async ({ data }) => {
+			try {
+				const message = await parseServerMessage(data);
+				this.lastMessageId = message.messageId;
+				this.receiver.listener(message);
+				this.client.listener(message);
+			} catch (e) {
+				console.log('Cannot parse message into JSON!', e, data);
+			}
+		});
 	}
-	onWebsocketOpen(options: WebSocketPlusOptions) {
+	onWebsocketOpen(options: WebSocketPlusOptions & { socket: WebSocket }) {
 		this.currentReconnectDelay = options.firstReconnectDelay;
+		this.client.setSocket(options.socket);
+		this.onSocketCreated(options.socket);
 		if (this.connectionId) {
 			this.client
 				.meta('/connection', {
@@ -72,16 +69,21 @@ class RestifyWebSocket<T extends X> {
 				})
 				.then((res) => {
 					this.connectionId = res.data;
+
+					this.client.setActive(true);
+					this.client.onSocketCreated(options.socket);
 				});
 		} else {
 			this.client.meta('/connection').then((res) => {
 				this.connectionId = res.data;
+				this.client.setActive(true);
+				this.client.onSocketCreated(options.socket);
 			});
 		}
 		if (this.lastMessageId) this.socket;
 	}
 
-	onWebsocketClose(options: WebSocketPlusOptions) {
+	onWebsocketClose(options: WebSocketPlusOptions & { socket: WebSocket }) {
 		this.socket = null;
 		setTimeout(() => {
 			this.reconnectToWebsocket(options);
