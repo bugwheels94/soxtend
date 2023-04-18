@@ -5,7 +5,7 @@ import { ServerOptions } from 'ws';
 import crypto from 'crypto';
 import { MessageDistributor, InMemoryMessageDistributor } from './distributor';
 // import { MessageStore } from './messageStore';
-import { MethodEnum, parseBrowserMessage } from './utils';
+import { parseBrowserMessage } from './utils';
 import EventEmitter from 'events';
 type RestifyServerEvents = 'connection' | 'close';
 
@@ -19,33 +19,6 @@ const onServerSocketInitialized = (socket: Socket, router: Router) => {
 			console.log('Cannot parse message from browser!', e);
 		}
 	});
-};
-
-const onServerSocketCreated = (socket: Socket, router: Router) => {
-	const temporary = async ({ data }) => {
-		socket.socket.removeEventListener('message', temporary);
-		try {
-			const parsedData = parseBrowserMessage(data);
-
-			if (parsedData === null) return;
-			if (parsedData.method === MethodEnum.META) {
-				const connectionId = parsedData.body;
-				if (connectionId) {
-					socket.setId(connectionId);
-					const groups = await router.getGroups(connectionId);
-					router.joinGroups(groups, socket);
-					onServerSocketInitialized(socket, router);
-				} else {
-					socket.setId(crypto.randomUUID());
-					onServerSocketInitialized(socket, router);
-					router.listener(parsedData, socket);
-				}
-			}
-		} catch (e) {
-			console.log('Cannot parse message from browser!', e);
-		}
-	};
-	socket.socket.addEventListener('message', temporary);
 };
 
 declare global {
@@ -86,20 +59,25 @@ export class RestifyWebSocketServer extends EventEmitter {
 
 				this.router = new Router(this.serverId, distributor);
 				this.router.meta('/connection', async (req, res) => {
+					const socket = res.socket as Socket;
+					let connectionId: string;
 					if (!req.body) {
+						connectionId = crypto.randomUUID();
 						// @ts-ignore
-						return res.send(res.socket.id, {
-							method: 'meta',
-							url: '/connection',
-						});
+						socket.setId(connectionId);
+					} else {
+						connectionId = req.body;
+						socket.setId(connectionId);
+						const groups = await this.router.getGroups(connectionId);
+						this.router.joinGroups(groups, socket);
 					}
-					// @ts-ignore
-					res.socket.setId(req.body);
+					res.send(connectionId);
+					this.router.newConnectionInitialized(socket);
 				});
 				this.emit('ready');
 				this.on('connection', (rawSocket) => {
 					const socket = new Socket(rawSocket);
-					onServerSocketCreated(socket, this.router);
+					onServerSocketInitialized(socket, this.router);
 					const connectionEvents = this.eventStore['connection'] || [];
 					connectionEvents.forEach(({ listener }) => {
 						listener({ socket });

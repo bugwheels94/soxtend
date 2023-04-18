@@ -108,6 +108,7 @@ export class Router {
 		[MethodEnum.DELETE]: [],
 		[MethodEnum.META]: [],
 	};
+	onConnectStore: ((socket: Socket) => void)[] = [];
 	constructor(private serverId: string, private store?: MessageDistributor) {
 		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
 		this.socketGroupStore = new SocketGroupStore();
@@ -123,6 +124,12 @@ export class Router {
 		this.store.listen(queueName, (connectionId: string, message: Uint8Array) => {
 			this.individualSocketConnectionStore.find(connectionId).send(message);
 		});
+	}
+	onConnect(callback: (socket: Socket) => void) {
+		this.onConnectStore.push(callback);
+	}
+	newConnectionInitialized(socket: Socket) {
+		this.onConnectStore.forEach((cb) => cb(socket));
 	}
 	async listenToGroupQueue(queueName: string) {
 		// `g:${serverId}`

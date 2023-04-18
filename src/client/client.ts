@@ -21,7 +21,8 @@ export class Client {
 	socket: WebSocket;
 	promiseStore: ClientPromiseStore = {};
 	pendingMessageStore: Uint8Array[] = [];
-
+	pendingMetaMessageStore: Uint8Array[] = [];
+	active: boolean = false;
 	method(method: MethodEnum, url: string, options: ClientRequest = {}) {
 		let socket: WebSocket, message: Uint8Array;
 		const { forget, ...remaining } = options;
@@ -30,8 +31,14 @@ export class Client {
 		id = this.id;
 		message = createMessageForServer(url, method, id, remaining);
 		socket = this.socket;
-
-		if (socket.CONNECTING === socket.readyState) {
+		const isMeta = method === MethodEnum.META;
+		if (isMeta) {
+			if (socket.CONNECTING === socket.readyState) {
+				this.pendingMetaMessageStore.push(message);
+			} else {
+				socket.send(message);
+			}
+		} else if (!this.active || socket.CONNECTING === socket.readyState) {
 			this.pendingMessageStore.push(message);
 		} else {
 			socket.send(message);
@@ -40,6 +47,9 @@ export class Client {
 		return new Promise<ParsedServerMessage>((resolve, reject) => {
 			this.promiseStore[this.id] = { resolve, reject };
 		});
+	}
+	setActive(bool: boolean) {
+		this.active = bool;
 	}
 	get(url: string, options?: ClientRequest) {
 		return this.method(MethodEnum.GET, url, options);
@@ -59,12 +69,16 @@ export class Client {
 	meta(url: string, options?: ClientRequest) {
 		return this.method(MethodEnum.META, url, options);
 	}
-	onSocketCreated(socket: WebSocket) {
+	setSocket(socket: WebSocket) {
 		this.socket = socket;
-		socket.addEventListener('open', () => {
-			this.pendingMessageStore.map((message) => socket.send(message));
-			this.pendingMessageStore = [];
-		});
+	}
+	onSocketCreated(socket: WebSocket) {
+		this.pendingMessageStore.map((message) => socket.send(message));
+		this.pendingMessageStore = [];
+	}
+	onSocketCreatedMeta(socket: WebSocket) {
+		this.pendingMetaMessageStore.map((message) => socket.send(message));
+		this.pendingMetaMessageStore = [];
 	}
 	async listener(message: ParsedServerMessage) {
 		// Message is coming from client to router and execution should be skipped
