@@ -1,15 +1,12 @@
-'use strict';
-
-var pluginNodeResolve = require('@rollup/plugin-node-resolve');
-var peerDepsExternal = require('rollup-plugin-peer-deps-external');
-var pluginBabel = require('@rollup/plugin-babel');
-var json = require('@rollup/plugin-json');
-var commonjs = require('@rollup/plugin-commonjs');
-var replace = require('@rollup/plugin-replace');
-var globby = require('fast-glob');
-var path = require('path');
-var terser = require('@rollup/plugin-terser');
-
+import { nodeResolve } from '@rollup/plugin-node-resolve';
+import peerDepsExternal from 'rollup-plugin-peer-deps-external';
+import { babel } from '@rollup/plugin-babel';
+import json from '@rollup/plugin-json';
+import commonjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
+import globby from 'fast-glob';
+import path from 'path';
+import terser from '@rollup/plugin-terser';
 const extensions = ['.js', '.ts', '.jsx', '.tsx'];
 const babelIncludes = ['./src/**/*'];
 const bundleNpmWorkspacePackages = [];
@@ -19,17 +16,12 @@ const shouldBundleLocalFilesTogether = false;
 const shouldBundleNodeModules = false;
 const isDevelopment = process.env.ROLLUP_WATCH;
 const decorators = false;
-process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production';
 const isPackageDependency = (pkg, path, importer = '') => {
 	return path.includes('/' + pkg + '/') || (importer.includes('/' + pkg + '/') && path.startsWith('.')) || path === pkg;
 };
 const getRollupConfig =
-	(
-		{ isBrowser = false, format = 'esm' } = {
-			isBrowser: false,
-			format: 'esm',
-		}
-	) =>
+	({ isBrowser = false, format = 'esm' } = { isBrowser: false, format: 'esm' }) =>
 	(localInput) => {
 		const input = localInput;
 		return {
@@ -64,6 +56,7 @@ const getRollupConfig =
 				) {
 					return false;
 				}
+
 				if (isNodeModule) {
 					return !shouldBundleNodeModules;
 				}
@@ -75,23 +68,22 @@ const getRollupConfig =
 					'process.env.NODE_ENV': `'${process.env.NODE_ENV}'`,
 				}),
 				json(),
-				pluginNodeResolve.nodeResolve({
+
+				nodeResolve({
 					extensions,
 					preferBuiltins: true,
+
 					browser: isBrowser ? true : false,
 				}),
 				commonjs(),
+
 				peerDepsExternal(),
-				pluginBabel.babel({
+				babel({
 					extensions,
 					babelHelpers: 'runtime',
 					include: babelIncludes,
 				}),
-				isDevelopment
-					? undefined
-					: terser({
-							keep_fnames: decorators,
-					  }),
+				isDevelopment ? undefined : terser({ keep_fnames: decorators }),
 			],
 		};
 	};
@@ -123,17 +115,8 @@ const wow = inputs.reduce((acc, input) => {
 	return [
 		...acc,
 		...formats.reduce((acc, format) => {
-			return [
-				...acc,
-				...files.map(
-					getRollupConfig({
-						isBrowser: input.browser,
-						format,
-					})
-				),
-			];
+			return [...acc, ...files.map(getRollupConfig({ isBrowser: input.browser, format }))];
 		}, []),
 	];
 }, []);
-
-module.exports = wow;
+export default wow;
