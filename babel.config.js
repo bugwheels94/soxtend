@@ -26,7 +26,7 @@ module.exports = {
 			},
 		],
 		cjs && ['@babel/transform-modules-commonjs', { loose }],
-		runtime === 'runtime' && [
+		'runtime' === 'runtime' && [
 			'@babel/transform-runtime',
 			{
 				// useESModules: !cjs, @babe
