@@ -15,19 +15,10 @@ module.exports = {
 				exclude: ['@babel/plugin-transform-regenerator'],
 			},
 		],
-		'@babel/preset-typescript',
+		...(true ? ['@babel/preset-typescript'] : []),
 	],
 	plugins: [
-		// [
-		// 'module-resolver',
-		// {
-		// 	root: ['.'],
-		// 	alias: {
-		// 		src: './src',
-		// 	},
-		// },
-		// ],
-		['@babel/plugin-proposal-decorators', { decoratorsBeforeExport: true }],
+		false && ['@babel/plugin-proposal-decorators', { decoratorsBeforeExport: true }],
 		[
 			'const-enum',
 			{
@@ -35,7 +26,7 @@ module.exports = {
 			},
 		],
 		cjs && ['@babel/transform-modules-commonjs', { loose }],
-		[
+		runtime === 'runtime' && [
 			'@babel/transform-runtime',
 			{
 				// useESModules: !cjs, @babe

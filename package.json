@@ -54,6 +54,10 @@
 		"redis": "^4.6.5"
 	},
 	"devDependencies": {
+		"@babel/core": "^7.21.8",
+		"@babel/plugin-transform-runtime": "^7.21.4",
+		"@babel/preset-env": "^7.21.5",
+		"@babel/preset-typescript": "^7.21.5",
 		"@rollup/plugin-babel": "^6.0.3",
 		"@rollup/plugin-commonjs": "^24.1.0",
 		"@rollup/plugin-json": "^6.0.0",
@@ -63,8 +67,11 @@
 		"@semantic-release/github": "^8.0.4",
 		"@semantic-release/npm": "^9.0.1",
 		"@types/ws": "^8.5.3",
+		"babel": "^6.23.0",
+		"babel-plugin-const-enum": "^1.2.0",
 		"cross-env": "^7.0.3",
 		"cz-conventional-changelog": "^3.3.0",
+		"false": "^0.0.4",
 		"fast-glob": "^3.2.12",
 		"husky": "^7.0.4",
 		"lint-staged": "^12.3.7",
