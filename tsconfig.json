@@ -29,9 +29,13 @@
 
 		"lib": ["esnext", "dom"],
 		"types": ["node"],
-		"typeRoots": ["@types", "src/types"]
+		"typeRoots": ["@types", "src/types"],
+		"emitDeclarationOnly": true,
+		"noEmit": false,
+		"declarationDir": "./dist/types"
 	},
-	"include": ["src/**/*.ts"],
-	"exclude": ["node_modules/**"],
-	"compileOnSave": false
+	"compileOnSave": false,
+	// "include": ["./src/**/*"],
+	"files": ["./src/index.ts", "./src/client/index.ts"]
+	// "exclude": ["node_modules"]
 }

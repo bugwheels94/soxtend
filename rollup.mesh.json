@@ -1,0 +1,21 @@
+{
+	"typescript": true,
+	"generateTypes": true,
+	"bundleLocalFiles": false,
+	"bundleDependencies": [],
+	"neverBundleDependencies": [],
+	"bundleNodeModules": false,
+	"bundleNpmWorkspacePackages": [],
+	"inputs": [
+		{
+			"include": ["./src/**", "!./src/client/**"],
+			"name": "server"
+		},
+		{
+			"include": ["./src/client/**"],
+			"name": "server2",
+			"browser": true
+		}
+	],
+	"formats": ["cjs", "esm"]
+}
