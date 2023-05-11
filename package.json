@@ -4,19 +4,19 @@
 	"description": "Websockets on steroid",
 	"exports": {
 		"./server": {
-			"types": "./dist/types-server/index.d.ts",
-			"import": "./dist/esm/server/index.js",
-			"default": "./dist/esm/server/index.js",
-			"require": "./dist/cjs/server/index.js"
+			"types": "./dist/types/index.d.ts",
+			"import": "./dist/esm/index.js",
+			"default": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
 		},
 		"./redis-distributor": {
-			"types": "./dist/types-server/distributor/redis.d.ts",
-			"import": "./dist/esm/server/distributor/redis.js",
-			"default": "./dist/esm/server/distributor/redis.js",
-			"require": "./dist/cjs/server/distributor/redis.js"
+			"types": "./dist/types/distributor/index.d.ts",
+			"import": "./dist/esm/distributor/redis.js",
+			"default": "./dist/esm/distributor/redis.js",
+			"require": "./dist/cjs/distributor/redis.js"
 		},
 		"./client": {
-			"types": "./dist/types-client/client/index.d.ts",
+			"types": "./dist/types/client/index.d.ts",
 			"import": "./dist/esm/client/index.js",
 			"default": "./dist/esm/client/index.js",
 			"require": "./dist/cjs/client/index.js"
@@ -41,14 +41,12 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"prepare": "husky install",
-		"build": "npm run build:types && npm run build:types:client && npm run build:code",
-		"build:code": " cross-env NODE_ENV=production rollup -c",
-		"build:types": "tsc --project ./tsconfig.types.json",
-		"build:types:client": "tsc --project ./tsconfig.client.types.json",
+		"build:watch": "run-p build:code:watch build:types:watch",
+		"build:types": "tsc --project ./tsconfig.json",
+		"build:types:watch": "tsc --watch --project ./tsconfig.json",
+		"build:code": "rollup -c",
 		"build:code:watch": "rollup -c -w",
-		"build:types:watch": "tsc --watch --project ./tsconfig.types.json",
-		"build:types:client:watch": "tsc --watch --project ./tsconfig.client.types.json",
-		"build:watch": "run-p build:code:watch build:types:watch build:types:client:watch"
+		"build": "run-p build:types build:code"
 	},
 	"author": "bugwheels94",
 	"license": "ISC",
@@ -56,33 +54,35 @@
 		"redis": "^4.6.5"
 	},
 	"devDependencies": {
-		"@babel/plugin-proposal-decorators": "^7.17.9",
-		"@babel/plugin-transform-runtime": "^7.17.0",
-		"@babel/preset-env": "^7.16.11",
-		"@babel/preset-typescript": "^7.16.7",
-		"@rollup/plugin-babel": "^5.3.1",
-		"@rollup/plugin-commonjs": "^21.0.2",
-		"@rollup/plugin-json": "^4.1.0",
-		"@rollup/plugin-node-resolve": "^13.2.1",
-		"@rollup/plugin-replace": "^4.0.0",
+		"@babel/core": "^7.21.8",
+		"@babel/plugin-transform-runtime": "^7.21.4",
+		"@babel/preset-env": "^7.21.5",
+		"@babel/preset-typescript": "^7.21.5",
+		"@rollup/plugin-babel": "^6.0.3",
+		"@rollup/plugin-commonjs": "^24.1.0",
+		"@rollup/plugin-json": "^6.0.0",
+		"@rollup/plugin-node-resolve": "^15.0.2",
+		"@rollup/plugin-replace": "^5.0.2",
+		"@rollup/plugin-terser": "^0.4.1",
 		"@semantic-release/github": "^8.0.4",
 		"@semantic-release/npm": "^9.0.1",
 		"@types/ws": "^8.5.3",
+		"babel": "^6.23.0",
 		"babel-plugin-const-enum": "^1.2.0",
 		"cross-env": "^7.0.3",
 		"cz-conventional-changelog": "^3.3.0",
-		"fast-glob": "^3.2.11",
+		"false": "^0.0.4",
+		"fast-glob": "^3.2.12",
 		"husky": "^7.0.4",
 		"lint-staged": "^12.3.7",
 		"npm-run-all": "^4.1.5",
-		"path-to-regexp": "^6.2.1",
 		"prettier": "2.6.0",
 		"replace": "^1.2.1",
-		"rollup": "^2.70.2",
+		"rollup": "^3.21.5",
 		"rollup-plugin-peer-deps-external": "^2.2.4",
 		"semantic-release": "^19.0.2",
-		"typescript": "^4.7.2",
-		"uuid": "^9.0.0"
+		"tslib": "^2.5.0",
+		"typescript": "^4.9.5"
 	},
 	"prettier": {
 		"singleQuote": true,
@@ -93,8 +93,9 @@
 		"**/*": "prettier --write --ignore-unknown"
 	},
 	"dependencies": {
-		"@babel/runtime": "^7.17.9",
+		"@babel/runtime": "^7.21.5",
 		"isomorphic-ws": "^4.0.1",
-		"ws": "^8.5.0"
+		"ws": "^8.5.0",
+		"path-to-regexp": "^6.2.1"
 	}
 }

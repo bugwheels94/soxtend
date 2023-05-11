@@ -1,39 +1,37 @@
-import resolve from '@rollup/plugin-node-resolve';
+import { nodeResolve } from '@rollup/plugin-node-resolve';
 import peerDepsExternal from 'rollup-plugin-peer-deps-external';
-import babel from '@rollup/plugin-babel';
+import { babel } from '@rollup/plugin-babel';
 import json from '@rollup/plugin-json';
 import commonjs from '@rollup/plugin-commonjs';
 import replace from '@rollup/plugin-replace';
 import globby from 'fast-glob';
 import path from 'path';
-const extensions = ['.js', '.ts'];
-const babelIncludes = ['./src/**/*', './client/**/*'];
-const configs = globby.sync(['./src/**', '!./src/**.json', '!./src/client/**']);
-const configsBrowser = globby.sync(['./src/client/**', '!./src/client/**.json']);
+import terser from '@rollup/plugin-terser';
+const extensions = ['.js', '.ts', '.jsx', '.tsx'];
+const babelIncludes = ['./src/**/*'];
 const bundleNpmWorkspacePackages = [];
-const bundlePackages = ['path-to-regexp'];
+const bundlePackages = [];
 const neverBundlePackages = [];
 const shouldBundleLocalFilesTogether = false;
-const isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'undefined';
+const shouldBundleNodeModules = false;
+const isDevelopment = process.env.ROLLUP_WATCH;
+const decorators = false;
 const isProduction = process.env.NODE_ENV === 'production';
 const isPackageDependency = (pkg, path, importer = '') => {
-	return (
-		path.includes('node_modules/' + pkg) ||
-		(importer.includes('node_modules/' + pkg) && path.startsWith('.')) ||
-		path === pkg
-	);
+	return path.includes('/' + pkg + '/') || (importer.includes('/' + pkg + '/') && path.startsWith('.')) || path === pkg;
 };
 const getRollupConfig =
 	({ isBrowser = false, format = 'esm' } = { isBrowser: false, format: 'esm' }) =>
-	(input) => {
+	(localInput) => {
+		const input = localInput;
 		return {
 			input,
 			output: {
 				file: path.join(
 					'./dist',
 					format,
-					isBrowser ? '' : 'server',
-					input.replace('/src', '').replace(/\.(tsx|ts)/, format === 'cjs' ? '.cjs' : '.js')
+					// isBrowser ? '' : 'server',
+					localInput.replace('/src', '').replace(/\.(tsx|ts)/, format === 'cjs' ? '.js' : '.js')
 				),
 				format,
 			},
@@ -60,9 +58,8 @@ const getRollupConfig =
 				}
 
 				if (isNodeModule) {
-					return true;
+					return !shouldBundleNodeModules;
 				}
-
 				return !shouldBundleLocalFilesTogether;
 			},
 			plugins: [
@@ -72,25 +69,54 @@ const getRollupConfig =
 				}),
 				json(),
 
-				resolve({
+				nodeResolve({
 					extensions,
+					preferBuiltins: true,
+
 					browser: isBrowser ? true : false,
 				}),
 				commonjs(),
+
+				peerDepsExternal(),
 				babel({
 					extensions,
 					babelHelpers: 'runtime',
 					include: babelIncludes,
 				}),
-
-				peerDepsExternal(),
+				isDevelopment ? undefined : terser({ keep_fnames: decorators }),
 			],
 		};
 	};
-export default [
-	...configs.map(getRollupConfig()),
-	...configs.map(getRollupConfig({ format: 'cjs' })),
-	...configs.map(getRollupConfig({ isBrowser: true, format: 'cjs' })),
-
-	...configsBrowser.map(getRollupConfig({ isBrowser: true })),
+const inputs = [
+	{ include: ['./src/**', '!./src/client/**'], name: 'server' },
+	{ include: ['./src/client/**'], name: 'server2', browser: true },
 ];
+
+/**[
+	{
+		include: ['./src/**', '!./src/client/**'],
+		entry: `./src/index.ts`,
+		name: 'server',
+	},
+	{
+		include: ['./src/client/**'],
+		entry: `./src/client/index.ts`,
+		name: 'server',
+		browser: true,
+	},
+];
+*/
+const wow = inputs.reduce((acc, input) => {
+	const files = globby.sync([...input.include, '!*.json'], {
+		// cwd: process.env.FOLDER_PATH,
+	});
+	// const tempp = files.map((file) => path.join(process.env.FOLDER_PATH, file));
+	const formats = ['cjs', 'esm'];
+	return [
+		...acc,
+		...formats.reduce((acc, format) => {
+			return [...acc, ...files.map(getRollupConfig({ isBrowser: input.browser, format }))];
+		}, []),
+	];
+}, []);
+export default wow;
