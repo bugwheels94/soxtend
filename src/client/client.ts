@@ -1,6 +1,16 @@
 import WebSocket from 'isomorphic-ws';
-import { DataType, MethodEnum, parseServerMessage } from './utils';
-type ParsedServerMessage = Awaited<ReturnType<typeof parseServerMessage>>;
+import { MethodEnum } from './utils';
+import { SoxtendClient, X } from '.';
+import { ListenersStore, Receiver } from './receiver';
+export type ParsedServerMessage = {
+	method: number;
+	header: Record<string, string>;
+	data: any;
+	messageId: number;
+	status: number;
+	_id: number;
+	url: string;
+};
 export type ClientRequest = {
 	body?: any;
 	headers?: Record<string, number | string>;
@@ -16,40 +26,36 @@ export type ClientPromiseStore = Record<
 	}
 >;
 
-export class Client {
+export class Client<MyWebSocketPlus extends SoxtendClient<X>> {
 	id: number = 0;
 	socket: WebSocket;
 	promiseStore: ClientPromiseStore = {};
-	pendingMessageStore: Uint8Array[] = [];
-	pendingMetaMessageStore: Uint8Array[] = [];
-	active: boolean = false;
+	receiver: Receiver;
+	constructor(private websocketPlus: MyWebSocketPlus) {
+		this.receiver = new Receiver();
+		this.websocketPlus.addEventListener('message', ({ detail }) => {
+			this.receiver.listener(detail);
+			this.listener(detail);
+		});
+	}
+	get addServerResponseListenerFor() {
+		return new ListenersStore(this.receiver);
+	}
 	method(method: MethodEnum, url: string, options: ClientRequest = {}) {
-		let socket: WebSocket, message: Uint8Array;
 		const { forget, ...remaining } = options;
 		let id: number | undefined;
 		this.id += 1;
 		id = this.id;
-		message = createMessageForServer(url, method, id, remaining);
-		socket = this.socket;
-		const isMeta = method === MethodEnum.META;
-		if (isMeta) {
-			if (socket.CONNECTING === socket.readyState) {
-				this.pendingMetaMessageStore.push(message);
-			} else {
-				socket.send(message);
-			}
-		} else if (!this.active || socket.CONNECTING === socket.readyState) {
-			this.pendingMessageStore.push(message);
-		} else {
-			socket.send(message);
-		}
+		this.websocketPlus.send({
+			url,
+			method,
+			id,
+			...remaining,
+		});
 		if (forget) return null;
 		return new Promise<ParsedServerMessage>((resolve, reject) => {
 			this.promiseStore[this.id] = { resolve, reject };
 		});
-	}
-	setActive(bool: boolean) {
-		this.active = bool;
 	}
 	get(url: string, options?: ClientRequest) {
 		return this.method(MethodEnum.GET, url, options);
@@ -72,107 +78,14 @@ export class Client {
 	setSocket(socket: WebSocket) {
 		this.socket = socket;
 	}
-	onSocketCreated(socket: WebSocket) {
-		this.pendingMessageStore.map((message) => socket.send(message));
-		this.pendingMessageStore = [];
-	}
-	onSocketCreatedMeta(socket: WebSocket) {
-		this.pendingMetaMessageStore.map((message) => socket.send(message));
-		this.pendingMetaMessageStore = [];
-	}
 	async listener(message: ParsedServerMessage) {
 		// Message is coming from client to router and execution should be skipped
-		if (message.respondingMessageId === undefined) return;
+		if (message._id === undefined) return;
 		if (message.status < 300) {
-			this.promiseStore[message.respondingMessageId].resolve(message);
+			this.promiseStore[message._id].resolve(message);
 		} else if (message.status >= 300) {
-			this.promiseStore[message.respondingMessageId].reject(message);
+			this.promiseStore[message._id].reject(message);
 		}
-		delete this.promiseStore[message.respondingMessageId];
+		delete this.promiseStore[message._id];
 	}
-}
-
-const encoder = new TextEncoder();
-export function createMessageForServer(
-	url: string | undefined,
-	method: MethodEnum,
-	id: number | undefined,
-	options?: ClientRequest
-) {
-	/**
-	 * Format of message:
-	 * To Other Servers
-	 * (NBitGrouporConnectionId):[ToBrowser But without empty 24bits prefix]
-	 * To Server From Browser
-	 * (8BitMethod)(8BitIsIdPresent)(8BitIsHeaderPresent)(16BitRequestId)(16BitURLLength)(URL)(16BitHeaderLength)(Header)(8BitBodytype)(Body)
-	 *
-	 */
-	const finalOptions = options || {};
-	const { headers, body } = finalOptions;
-	const headerEncoded = headers ? encoder.encode(JSON.stringify(headers)) : '';
-
-	let binaryPayload: Uint8Array | undefined = undefined;
-	let bodyType: null | DataType = null;
-	if (body instanceof Uint8Array) {
-		binaryPayload = body;
-		bodyType = DataType.BINARY;
-	} else if (typeof body === 'string') {
-		bodyType = DataType.TEXT;
-		binaryPayload = encoder.encode(body);
-	} else if (body) {
-		bodyType = DataType.JSON;
-		binaryPayload = encoder.encode(JSON.stringify(body));
-	}
-	const urlEncoded = encoder.encode(url);
-
-	const dataLength =
-		1 +
-		1 +
-		1 +
-		(id === undefined ? 0 : 2) +
-		2 +
-		urlEncoded.length +
-		(headerEncoded ? 2 + headerEncoded.length : 0) +
-		(binaryPayload ? binaryPayload.length + 1 : 0);
-	// Concating TypedArray isfaster than concatting strings
-	const finalMessage = new Uint8Array(dataLength);
-	let filledLength = 0;
-	finalMessage[0] = method;
-	if (id !== undefined) {
-		finalMessage[1] = 1;
-	}
-
-	if (headerEncoded) {
-		finalMessage[2] = 1;
-	}
-	filledLength += 3;
-
-	if (id !== undefined) {
-		finalMessage[filledLength++] = Math.floor(id / 255);
-		finalMessage[filledLength++] = id % 255;
-	}
-	const urlLength = urlEncoded.length;
-	if (urlLength > 255) {
-		finalMessage[filledLength++] = Math.floor(urlLength / 255);
-	} else finalMessage[filledLength++] = 0;
-	finalMessage[filledLength++] = urlLength % 255;
-
-	finalMessage.set(urlEncoded, filledLength);
-	filledLength += urlEncoded.length;
-	if (headerEncoded) {
-		const headerLength = headerEncoded.length;
-		if (headerLength > 255) {
-			finalMessage[filledLength++] = Math.floor(headerLength / 255);
-		} else finalMessage[filledLength++] = 0;
-		finalMessage[filledLength++] = headerLength % 255;
-
-		finalMessage.set(headerEncoded, filledLength);
-		filledLength += headerEncoded.length;
-	}
-
-	if (bodyType !== null) {
-		finalMessage[filledLength++] = bodyType;
-		finalMessage.set(binaryPayload, filledLength);
-	}
-	return finalMessage;
 }

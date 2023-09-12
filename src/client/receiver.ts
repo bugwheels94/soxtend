@@ -1,4 +1,5 @@
-import { Method, MethodEnum, parseServerMessage } from './utils';
+import { ParsedServerMessage } from './client';
+import { Method, MethodEnum } from './utils';
 import { match, MatchFunction, MatchResult } from 'path-to-regexp';
 export type ReceiverStore = Record<MethodEnum, ReceiverRoute[]>;
 
@@ -26,8 +27,48 @@ export type ReceiverRequest<P extends object = object> = {} & MatchResult<P>;
 
 type Params = Record<string, string>;
 
+export class ListenersStore {
+	private id: string;
+	constructor(private receiver: Receiver) {
+		this.id = crypto.randomUUID();
+	}
+	get<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.receiver.registerRoute(MethodEnum.GET, url, this.id, ...callbacks);
+		return this;
+	}
+	put<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.receiver.registerRoute(MethodEnum.PUT, url, this.id, ...callbacks);
+		return this;
+	}
+	post<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.receiver.registerRoute(MethodEnum.POST, url, this.id, ...callbacks);
+		return this;
+	}
+	patch<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.receiver.registerRoute(MethodEnum.PATCH, url, this.id, ...callbacks);
+		return this;
+	}
+	delete<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.receiver.registerRoute(MethodEnum.DELETE, url, this.id, ...callbacks);
+		return this;
+	}
+	meta<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
+		this.receiver.registerRoute(MethodEnum.META, url, this.id, ...callbacks);
+		return this;
+	}
+	stopListening() {
+		this.receiver.clearChain(this.id);
+	}
+	removeListener(method: Method, callback: ReceiverCallback) {
+		this.receiver.store[method] = this.receiver.store[method].map((route: ReceiverRoute) => {
+			if (route.callbacks.includes(callback)) {
+				route.callbacks = route.callbacks.filter((c) => c !== callback);
+			}
+			return route;
+		});
+	}
+}
 export class Receiver {
-	chainName: string | null = null;
 	chainInfo: Record<string, any[]> = {};
 	store: ReceiverStore = {
 		[MethodEnum.GET]: [],
@@ -37,25 +78,17 @@ export class Receiver {
 		[MethodEnum.DELETE]: [],
 		[MethodEnum.META]: [],
 	};
-	registerRoute(method: MethodEnum, url: string, ...callbacks: ReceiverCallback[]) {
-		if (this.chainName) {
-			this.chainInfo[this.chainName].push({
-				method,
-				callbacks,
-			});
-		}
+	registerRoute(method: MethodEnum, url: string, chain: string, ...callbacks: ReceiverCallback[]) {
+		this.chainInfo[chain] = this.chainInfo[chain] || [];
+		this.chainInfo[chain].push({
+			method,
+			callbacks,
+		});
 		this.store[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
 			callbacks,
 		});
-	}
-	startChainedRoutes(chainName: string) {
-		this.chainName = chainName;
-		this.chainInfo[this.chainName] = [];
-	}
-	endChainedRoutes() {
-		this.chainName = null;
 	}
 	clearChain(chainName: string) {
 		this.chainInfo[chainName]?.forEach((route) => {
@@ -63,35 +96,9 @@ export class Receiver {
 		});
 		delete this.chainInfo[chainName];
 	}
-	get<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute(MethodEnum.GET, url, ...callbacks);
-	}
-	put<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute(MethodEnum.PUT, url, ...callbacks);
-	}
-	post<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute(MethodEnum.POST, url, ...callbacks);
-	}
-	patch<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute(MethodEnum.PATCH, url, ...callbacks);
-	}
-	delete<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute(MethodEnum.DELETE, url, ...callbacks);
-	}
-	meta<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
-		this.registerRoute(MethodEnum.META, url, ...callbacks);
-	}
-	removeListener(method: Method, callback: ReceiverCallback) {
-		this.store[method] = this.store[method].map((route: ReceiverRoute) => {
-			if (route.callbacks.includes(callback)) {
-				route.callbacks = route.callbacks.filter((c) => c !== callback);
-			}
-			return route;
-		});
-	}
-	async listener(message: Awaited<ReturnType<typeof parseServerMessage>>) {
+	async listener(message: Omit<ParsedServerMessage, '_id'>) {
 		// Message is coming from router to client and execution should be skipped
-		if (message.respondingMessageId) return;
+		if ('_id' in message) return;
 		let store: ReceiverStore[MethodEnum.GET] = this.store[message.method];
 		try {
 			for (let i = 0; i < store.length; i += 1) {

@@ -1,4 +1,4 @@
-<h1 align="center">Restify Websocket ( Beta )</h1>
+<h1 align="center">Soxtend</h1>
 <p align="center">Easiest Websocket library for big projects</p>
 
 ![alt text](docs/banner.png)

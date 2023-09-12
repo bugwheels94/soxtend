@@ -20,7 +20,9 @@ export class ApiError extends Error {
 		this.status = status;
 	}
 }
-
+export type JsonObject = {
+	[key: string]: string | number | boolean | null | JsonObject | JsonObject[];
+};
 export type Method = 'get' | 'put' | 'patch' | 'post' | 'delete' | 'meta';
 export const store: Record<string | number, WebSocket[]> = {};
 export enum MethodEnum {
@@ -31,8 +33,15 @@ export enum MethodEnum {
 	DELETE,
 	META,
 }
+export type AllowedType = string | Uint8Array;
+export type Serialize<DataSentOverWire extends AllowedType = string> = (message: JsonObject) => DataSentOverWire;
+export type Deserialize = (_: Buffer) => JsonObject;
+export type DefaultSerialize = (_: JsonObject) => string;
+export type FlexibleSerialize = (_: JsonObject) => AllowedType;
+export type DefaultDeserialize = (_: Buffer) => JsonObject;
+export type FlexibleDeserialize = (_: Buffer) => any;
 
-export function parseBrowserMessage(data: WebSocket.Data) {
+export function deserialize(data: Buffer) {
 	/**
 	 * To Server From Browser
 	 * (8BitMethod)(8BitIsIdPresent)(8BitIsHeaderPresent)(16BitRequestId)(16BitURLLength)(URL)(16BitHeaderLength)(Header)(8BitBodytype)(Body)
@@ -40,7 +49,6 @@ export function parseBrowserMessage(data: WebSocket.Data) {
 	 * 
 	 */
 
-	if (!(data instanceof Buffer)) return null;
 	const ui8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 	let index = 3;
 	const isHeaderPresent = ui8[2];
@@ -82,14 +90,21 @@ export function parseBrowserMessage(data: WebSocket.Data) {
 }
 const encoder = new TextEncoder();
 
-export function createMessageForBrowser(
-	url: string | undefined,
-	method: MethodEnum,
-	headers: Record<string, string | number> | undefined,
-	status: HttpStatusCode | undefined,
-	requestId: number | undefined,
-	data?: any
-) {
+export function serialize({
+	url,
+	method,
+	headers,
+	status,
+	requestId,
+	data,
+}: {
+	url: string | undefined;
+	method: MethodEnum;
+	headers: Record<string, string | number> | undefined;
+	status: HttpStatusCode | undefined;
+	requestId: number | undefined;
+	data?: any;
+}) {
 	/**
 	 * Format of message:
 	 * To Browsers:

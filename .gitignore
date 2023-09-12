@@ -21,3 +21,6 @@ yarn-error.log*
 
 *.tsbuildinfo
 .rollup.cache/
+/test-results/
+/playwright-report/
+/playwright/.cache/

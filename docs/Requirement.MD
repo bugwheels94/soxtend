@@ -2,9 +2,52 @@
 
 1. Should support multi node
 2. Should support delivery of messages again for reconnected browsers
-3. Should be as close to HTTP as possible
+3. Should provide an interface as close to REST as possible
 4. Should support middle ware auth like expressJS and also support tradition auth of WS, i.e. check auth during upgrade WS request
 5. Should support addition of new WS servers dynamically
+6. Should also be usable purely dual channel unlike REST.
+
+Raw Generic API should be:
+
+On Server
+
+const server = new WebsocketServer("", {
+serializer, deserializer
+});
+const [de]serializer = new [De]Serializer([
+{
+name: "status",
+size: 1
+},
+{
+name: "method",
+size: 1
+},
+{
+name: "body"
+}
+])
+server.on("connection", socket => {
+socket.on(message, Uint8Array => {
+const data = deserialize(Uint8Array)
+})
+Uint8Array = serializer.serialize({
+
+})
+Uint8Array = serializer.serialize([])
+server.send(message, Uint8Array)
+
+})
+
+server.sendToGroup()
+socket.joinGroup()
+server.sendToIndividual()
+const router = new Router(server);
+router.get("/resource/:resourceId", async (req, res) => {
+
+})
+
+We need a way to let know of the formatting
 
 ## When browser loses Server Connection
 
@@ -74,3 +117,10 @@ Exception: When browser reconnects and few messages are still waiting to be batc
 3. Timely sent ack from browsers to server to clear messages that have been consumed
 4. Inspect on the side of browser by message sequence number to know any lost messages(for UDP only needed and WS is TCP so kind of not needed)
    .
+   Conclusion: Too hard to implement. Solution will be very buggy and might use significant storage and performance. Very hard to adapt to individual app needs as many apps might need more granular control over what to fetch on reconnect or not.
+
+### Restify Adapter
+
+Servers can either respond to client or just send one way to client.
+Clients can either make request to server or just listen to server via a receiver.
+client.addServerResponseListenerFor.get("/resource").stopListening()

@@ -2,6 +2,9 @@ import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
 // import { MessageStore } from './messageStore';
 import crypto from 'crypto';
+import EventEmitter from 'events';
+import { AllowedType, JsonObject, Serialize } from './utils';
+
 export type ClientResponse = {
 	_id: number;
 	status: HttpStatusCode;
@@ -27,42 +30,41 @@ export type ClientPromiseStore = Record<
 	}
 >;
 
-export class Socket {
+export class Socket<DataSentOverWire extends AllowedType = string> extends EventEmitter {
 	id: string;
-	socket: WebSocket;
+	private serialize: Serialize<DataSentOverWire>;
+	storage: Record<string, any> = {};
+	mode?: 'string' | 'Uint8Array';
+	rawSocket: WebSocket;
 	// store?: MessageStore | undefined;
 	groups: Set<string> = new Set();
-	lastMessageId = 0;
-	send(data: Uint8Array) {
-		let socket = this.socket;
-		let id = ++this.lastMessageId;
-		data[2] = id & 255;
-		id = id >> 8;
-		data[1] = id & 255;
-		id = id >> 8;
-		data[0] = id & 255;
-
-		socket = this.socket;
-		// if (this.store) {
-		// 	this.store.insert(this.id, [[this.lastMessageId + '-0', data]]);
-		// }
-
-		// inject code for insert into reconnect queue here
-		// 1. Save locally for 5 seconds(configurable)
-		// 2. If browser sends ack before then discard messages directly
-		// 3. otherwise, start inserting into redis
-		// 4. After, n seconds or given length clear the queue
-		socket.send(data);
+	send(object: JsonObject) {
+		const serializedMessage = this.serialize(object);
+		//@ts-ignore
+		this.rawSocket.send(serializedMessage);
 	}
 	setId(id: string) {
 		this.id = id;
 	}
 	constructor(
-		socket: WebSocket
-		// , store?: MessageStore
+		socket: WebSocket,
+		{
+			mode,
+			serialize,
+		}: {
+			serialize: Serialize<DataSentOverWire>;
+
+			mode: 'string' | 'Uint8Array';
+		} // , store?: MessageStore
 	) {
-		this.socket = socket;
+		super();
+		this.serialize = serialize;
+
+		this.mode = mode;
+
+		this.rawSocket = socket;
 		// this.store = store;
 		this.id = crypto.randomUUID();
 	}
+	addListener: (method: 'message', listener: (message: JsonObject) => void) => this;
 }

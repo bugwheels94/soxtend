@@ -1,13 +1,17 @@
-import { TextEncoder } from 'util';
 import HttpStatusCode from './statusCodes';
-import { ApiError, MethodEnum, parseBrowserMessage, createMessageForBrowser, Method } from './utils';
+import { ApiError, MethodEnum, Method } from './utils';
 import { match, MatchFunction, MatchResult } from 'path-to-regexp';
 import { Socket } from './client';
-import { MessageDistributor } from './distributor';
-import { SocketGroupStore, IndividualSocketConnectionStore } from './localStores';
+import { SoxtendServer } from '.';
 export type RouterStore = Record<MethodEnum, Route[]>;
 
-export type RouterRequest<P extends object = object> = ReturnType<typeof parseBrowserMessage> & MatchResult<P>;
+export type RouterRequest<P extends object = object> = {
+	id: string;
+	url: string;
+	method: MethodEnum;
+	header: Record<string, string>;
+	body: any;
+} & MatchResult<P>;
 type SendMessageFromServerOptions = {
 	method?: Method;
 	headers?: Record<string, string | number>;
@@ -22,30 +26,9 @@ const temp: Record<Method, MethodEnum> = {
 	delete: MethodEnum.DELETE,
 	meta: MethodEnum.META,
 };
-export function createResponse(
-	type: 'self' | 'group' | 'individual',
-	message: ReturnType<typeof parseBrowserMessage>,
-	instance: Socket | string,
-	router: Router
-) {
+function createIndividualRespone(connectionId: string, message: RouterRequest, server: SoxtendServer) {
 	let hasStatusBeenSet = false;
 	return {
-		...(instance instanceof Socket
-			? {
-					joinGroup: async (groupId: string) => {
-						return router.joinGroup(groupId, instance);
-					},
-					leaveGroup: async (groupId: string) => {
-						return router.leaveGroup(groupId, instance);
-					},
-					leaveGroups: async (groups: string[]) => {
-						return router.leaveGroups(groups, instance);
-					},
-					leaveAllGroups: async () => {
-						return router.leaveAllGroups(instance);
-					},
-			  }
-			: {}),
 		_status: 200,
 		_url: String,
 		headers: undefined,
@@ -53,13 +36,36 @@ export function createResponse(
 			this.headers = this.headers || {};
 			this.headers[key] = value;
 		},
-		socket: instance,
-		clients: router.socketGroupStore,
-		group: function (groupName: string) {
-			return createResponse('group', message, groupName, router);
+
+		status: function (status: HttpStatusCode) {
+			if (hasStatusBeenSet)
+				throw new Error(`Cannot overwrite status status(${status}) from previously set status(${this._status}) `);
+			this._status = status;
+			hasStatusBeenSet = true;
+			return this;
 		},
-		to: function (connectionId: string) {
-			return createResponse('individual', message, connectionId, router);
+		send: function (data: any, options: SendMessageFromServerOptions = {}) {
+			const finalMessage = {
+				url: options.url === undefined ? message.url : options.url,
+				method: options.method === undefined ? message.method : temp[options.method],
+				headers: options.headers || this.headers,
+				status: options.status === undefined ? this._status : options.status,
+				data,
+			};
+			server.sendToIndividual(connectionId, finalMessage);
+			return this;
+		},
+	};
+}
+function createGroupResponse(groupId: string, message: RouterRequest, server: SoxtendServer) {
+	let hasStatusBeenSet = false;
+	return {
+		_status: 200,
+		_url: String,
+		headers: undefined,
+		set: function (key: string, value: string) {
+			this.headers = this.headers || {};
+			this.headers[key] = value;
 		},
 		status: function (status: HttpStatusCode) {
 			if (hasStatusBeenSet)
@@ -69,26 +75,73 @@ export function createResponse(
 			return this;
 		},
 		send: function (data: any, options: SendMessageFromServerOptions = {}) {
-			const finalMessage = createMessageForBrowser(
-				options.url === undefined ? message.url : options.url,
-				options.method === undefined ? message.method : temp[options.method],
-				options.headers || this.headers,
-				options.status === undefined ? this._status : options.status,
-				type === 'self' ? message.requestId : undefined,
-				data
-			);
-			if (type === 'group' && typeof instance === 'string') {
-				router.sendToGroup(instance, finalMessage);
-			} else if (type === 'individual' && typeof instance === 'string') router.sendToGroup(instance, finalMessage);
-			else if (type === 'self' && instance instanceof Socket) instance.send(finalMessage);
+			const finalMessage = {
+				url: options.url === undefined ? message.url : options.url,
+				method: options.method === undefined ? message.method : temp[options.method],
+				headers: options.headers || this.headers,
+				status: options.status === undefined ? this._status : options.status,
+				data,
+			};
+			server.sendToGroup(groupId, finalMessage);
 			return this;
 		},
 	};
 }
-export type RouterResponse = ReturnType<typeof createResponse>;
+function createSelfResponse(instance: Socket, message: RouterRequest, server: SoxtendServer) {
+	let hasStatusBeenSet = false;
+	return {
+		joinGroup: async (groupId: string) => {
+			return server.joinGroup(groupId, instance);
+		},
+		leaveGroup: async (groupId: string) => {
+			return server.leaveGroup(groupId, instance);
+		},
+		leaveGroups: async (groups: string[]) => {
+			return server.leaveGroups(groups, instance);
+		},
+		leaveAllGroups: async () => {
+			return server.leaveAllGroups(instance);
+		},
+		_status: 200,
+		_url: String,
+		headers: undefined,
+		set: function (key: string, value: string) {
+			this.headers = this.headers || {};
+			this.headers[key] = value;
+		},
+		socket: instance,
+		clients: server.socketGroupStore,
+		group: function (groupName: string) {
+			return createGroupResponse(groupName, message, server);
+		},
+		to: function (connectionId: string) {
+			return createIndividualRespone(connectionId, message, server);
+		},
+		status: function (status: HttpStatusCode) {
+			if (hasStatusBeenSet)
+				throw new Error(`Cannot overwrite status status(${status}) from previously set status(${this._status}) `);
+			this._status = status;
+			hasStatusBeenSet = true;
+			return this;
+		},
+		send: function (data: any, options: SendMessageFromServerOptions = {}) {
+			const finalMessage = {
+				url: options.url === undefined ? message.url : options.url,
+				method: options.method === undefined ? message.method : temp[options.method],
+				headers: options.headers || this.headers,
+				status: options.status === undefined ? this._status : options.status,
+				_id: message.id,
+				data,
+			};
+			instance.send(finalMessage);
+			return this;
+		},
+	};
+}
+export type RouterResponse = ReturnType<typeof createSelfResponse>;
 export type RouterCallback<P extends object = object> = (
 	request: RouterRequest<P>,
-	response: ReturnType<typeof createResponse>
+	response: ReturnType<typeof createSelfResponse>
 ) => Promise<void> | void;
 export type Route = {
 	literalRoute: string;
@@ -97,8 +150,17 @@ export type Route = {
 };
 
 type Params = Record<string, string>;
+const onServerSocketInitialized = (socket: Socket, router: Router) => {
+	socket.addListener('message', (data) => {
+		try {
+			// @ts-ignore
+			router.listener(data, socket);
+		} catch (e) {
+			console.error('Cannot parse message from browser!', e);
+		}
+	});
+};
 
-const encoder = new TextEncoder();
 export class Router {
 	requestStore: RouterStore = {
 		[MethodEnum.GET]: [],
@@ -109,105 +171,19 @@ export class Router {
 		[MethodEnum.META]: [],
 	};
 	onConnectStore: ((socket: Socket) => void)[] = [];
-	constructor(private serverId: string, private store?: MessageDistributor) {
-		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
-		this.socketGroupStore = new SocketGroupStore();
-		this.listenToIndividualQueue(`i:${this.serverId}`);
-		this.listenToGroupQueue(`server-messages:${this.serverId}`);
-	}
-	individualSocketConnectionStore: IndividualSocketConnectionStore;
-
-	socketGroupStore: SocketGroupStore;
-	async listenToIndividualQueue(queueName: string) {
-		// `i:${serverId}`
-		if (!this.store) return;
-		this.store.listen(queueName, (connectionId: string, message: Uint8Array) => {
-			this.individualSocketConnectionStore.find(connectionId).send(message);
+	constructor(private server: SoxtendServer) {
+		this.server.addListener('connection', (socket) => {
+			onServerSocketInitialized(socket, this);
 		});
 	}
+
 	onConnect(callback: (socket: Socket) => void) {
 		this.onConnectStore.push(callback);
 	}
 	newConnectionInitialized(socket: Socket) {
 		this.onConnectStore.forEach((cb) => cb(socket));
 	}
-	async listenToGroupQueue(queueName: string) {
-		// `g:${serverId}`
-		if (!this.store) return;
-		this.store.listen(queueName, (groupId: string, message: Uint8Array) => {
-			this.socketGroupStore.find(groupId)?.forEach((socket) => {
-				socket.send(message);
-			});
-		});
-	}
-	async sendToGroup(id: string, message: Uint8Array) {
-		// this.socketGroupStore.find(id)?.forEach((socket) => {
-		// 	socket.send(message);
-		// });
 
-		const servers = await this.store.getListItems(`group-servers:${id}`);
-		const groupArray = encoder.encode(id);
-		const messageWithGroupId = new Uint8Array(message.length + 1 + groupArray.length);
-		messageWithGroupId[0] = groupArray.length;
-		messageWithGroupId.set(groupArray, 1);
-		messageWithGroupId.set(message, 1 + groupArray.length);
-		for (let server of servers) {
-			this.store.enqueue(`server-messages:${server}`, messageWithGroupId); // send to the server oin group channel
-		}
-	}
-	async joinGroup(id: string, socket: Socket) {
-		this.socketGroupStore.add(socket, id);
-		if (!this.store) return undefined;
-		return Promise.all([
-			this.store.addListItem(`my-groups:${socket.id}`, id),
-			this.store.addListItem(`group-servers:${id}`, this.serverId),
-		]);
-	}
-	async joinGroups(groupdIds: Iterable<string>, socket: Socket) {
-		for (let groupId of groupdIds) {
-			this.socketGroupStore.add(socket, groupId);
-			this.store.addListItem(`group-servers:${groupId}`, this.serverId);
-		}
-		this.store.addListItems(`my-groups:${socket.id}`, groupdIds);
-	}
-	async leaveGroup(groupId: string, socket: Socket) {
-		this.socketGroupStore.remove(socket, groupId);
-
-		return this.store.removeListItem(`my-groups:${socket.id}`, groupId);
-	}
-	async leaveAllGroups(socket: Socket) {
-		const groups = await this.store.getListItems(`my-groups:${socket.id}`);
-		for (let group of groups) {
-			this.socketGroupStore.remove(socket, group);
-		}
-		this.store.removeListItems(`my-groups:${socket.id}`, groups);
-	}
-	async leaveGroups(groups: string[], socket: Socket) {
-		for (let group of groups) {
-			this.socketGroupStore.remove(socket, group);
-		}
-
-		return Promise.all([this.store.removeListItems(`my-groups:${socket.id}`, groups)]);
-	}
-	async getGroups(connectionId: string) {
-		return this.store.getListItems(`my-groups:${connectionId}`);
-	}
-	async sendToIndividual(id: string, message: Uint8Array) {
-		const socket = this.individualSocketConnectionStore.find(id);
-		if (socket) {
-			socket.send(message);
-			return;
-		}
-		if (!this.store) return;
-
-		const server = await this.store.get(`i:${id}`);
-		const groupArray = encoder.encode(id);
-		const messageWithGroupId = new Uint8Array(message.length + 1 + groupArray.length);
-		messageWithGroupId[0] = groupArray.length;
-		messageWithGroupId.set(groupArray, 1);
-		messageWithGroupId.set(message, 1 + groupArray.length);
-		this.store.enqueue(`i:${server}`, messageWithGroupId);
-	}
 	registerRoute(method: MethodEnum, url: string, ...callbacks: RouterCallback[]) {
 		this.requestStore[method].push({
 			literalRoute: url,
@@ -233,10 +209,10 @@ export class Router {
 	meta<P extends object = Params>(url: string, ...callbacks: RouterCallback<P>[]) {
 		this.registerRoute(MethodEnum.META, url, ...callbacks);
 	}
-	async listener(message: ReturnType<typeof parseBrowserMessage>, mySocket: Socket) {
+	async listener(message: RouterRequest, mySocket: Socket) {
 		// Message is coming from router to client and execution should be skipped
 		let store: RouterStore[MethodEnum.GET];
-		let method: MethodEnum = message.method;
+		let method: MethodEnum = message.method as MethodEnum;
 		store = this.requestStore[method];
 		/**
 		 * Response usage
@@ -247,10 +223,10 @@ export class Router {
 		 *
 		 */
 
-		const response = createResponse('self', message, mySocket, this);
+		const response = createSelfResponse(mySocket, message, this.server);
 		try {
 			for (let i = 0; i < store.length; i += 1) {
-				const matched = store[i].match(message.url);
+				const matched = store[i].match(message.url as string);
 				if (!matched) continue;
 				for (let j = 0; j < store[i].callbacks.length; j++)
 					await store[i].callbacks[j]({ ...message, ...matched }, response);

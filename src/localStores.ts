@@ -1,4 +1,5 @@
 import { Socket } from './client';
+import { AllowedType } from './utils';
 
 export interface LocalGroupStore {
 	add: (socketId: string, groupId: string | number) => void;
@@ -14,10 +15,10 @@ export interface LocalGroupStore {
  * normal fetch will have response
  * receiver.get|post|put1
  */
-export class SocketGroupStore {
-	store: Map<string | number, Set<Socket>> = new Map();
+export class SocketGroupStore<DataSentOverWire extends AllowedType = string> {
+	store: Map<string | number, Set<Socket<DataSentOverWire>>> = new Map();
 
-	add(socket: Socket, groupId: string | number) {
+	add(socket: Socket<DataSentOverWire>, groupId: string | number) {
 		// if (!groupId) {
 		// 	return new SocketGroup(socketSet);
 		// }
@@ -26,7 +27,7 @@ export class SocketGroupStore {
 			existingClient.add(socket);
 			return existingClient;
 		}
-		const newClient = new Set<Socket>();
+		const newClient = new Set<Socket<DataSentOverWire>>();
 		newClient.add(socket);
 		this.store.set(groupId, newClient);
 		return newClient;
@@ -34,7 +35,7 @@ export class SocketGroupStore {
 	find(id: string | number) {
 		return this.store.get(id);
 	}
-	remove(socket: Socket, groupId: string | number) {
+	remove(socket: Socket<DataSentOverWire>, groupId: string | number) {
 		const group = this.store.get(groupId);
 		group.delete(socket);
 	}
@@ -42,10 +43,10 @@ export class SocketGroupStore {
 		// this.clients.set('*', new SocketGroup());
 	}
 }
-export class IndividualSocketConnectionStore {
-	store: Map<string, Socket> = new Map();
+export class IndividualSocketConnectionStore<DataSentOverWire extends AllowedType = string> {
+	store: Map<string, Socket<DataSentOverWire>> = new Map();
 
-	add(socket: Socket) {
+	add(socket: Socket<DataSentOverWire>) {
 		this.store.set(socket.id, socket);
 		// if (!groupId) {
 		// 	return new SocketGroup(socketSet);
