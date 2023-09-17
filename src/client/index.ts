@@ -64,7 +64,7 @@ export class SoxtendClient<
 		this.emit('open', '');
 		this.currentReconnectDelay = options.firstReconnectDelay;
 		// this.client.setSocket(options.socket);
-		this.socket.send(this.connectionId);
+		this.socket.send(this.connectionId || '');
 		const newConnection = ({ data }) => {
 			this.connectionId = data;
 			this.active = true;

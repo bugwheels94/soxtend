@@ -197,7 +197,7 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 				this.listenToIndividualQueue(`i:${this.serverId}`);
 				this.listenToGroupQueue(`server-messages:${this.serverId}`);
 				this.rawWebSocketServer = new WebSocket.Server(options);
-
+				this.emit('ready');
 				this.rawWebSocketServer.on('connection', (rawSocket) => {
 					const socket = new Socket<DataSentOverWire>(rawSocket, { mode, serialize: this.serialize });
 					const newConnection = async (buffer: Buffer) => {
@@ -301,6 +301,7 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 
 	addListener(method: 'connection', listener: (socket: Socket<DataSentOverWire>) => void): this;
 	addListener(method: 'close', listener: (socket: Socket<DataSentOverWire>) => void): this;
+	addListener(method: 'ready', listener: () => void): this;
 
 	addListener(method: string, listener: (e?: any) => void): this {
 		super.addListener(method, listener);
