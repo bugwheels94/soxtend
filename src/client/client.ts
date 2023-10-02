@@ -81,6 +81,8 @@ export class Client<MyWebSocketPlus extends SoxtendClient<X>> {
 	async listener(message: ParsedServerMessage) {
 		// Message is coming from client to router and execution should be skipped
 		if (message._id === undefined) return;
+		const thisPromise = this.promiseStore[message._id];
+		if (!thisPromise) return;
 		if (message.status < 300) {
 			this.promiseStore[message._id].resolve(message);
 		} else if (message.status >= 300) {
