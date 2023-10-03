@@ -28,9 +28,9 @@ export type ReceiverRequest<P extends object = object> = {} & MatchResult<P>;
 type Params = Record<string, string>;
 
 export class ListenersStore {
-	private id: string;
+	private id: number;
 	constructor(private receiver: Receiver) {
-		this.id = crypto.randomUUID();
+		this.id = receiver.lastListenerId++;
 	}
 	get<P extends object = Params>(url: string, ...callbacks: ReceiverCallback<P>[]) {
 		this.receiver.registerRoute(MethodEnum.GET, url, this.id, ...callbacks);
@@ -70,6 +70,7 @@ export class ListenersStore {
 }
 export class Receiver {
 	chainInfo: Record<string, any[]> = {};
+	lastListenerId = 1;
 	store: ReceiverStore = {
 		[MethodEnum.GET]: [],
 		[MethodEnum.POST]: [],
@@ -78,7 +79,7 @@ export class Receiver {
 		[MethodEnum.DELETE]: [],
 		[MethodEnum.META]: [],
 	};
-	registerRoute(method: MethodEnum, url: string, chain: string, ...callbacks: ReceiverCallback[]) {
+	registerRoute(method: MethodEnum, url: string, chain: number, ...callbacks: ReceiverCallback[]) {
 		this.chainInfo[chain] = this.chainInfo[chain] || [];
 		this.chainInfo[chain].push({
 			method,
@@ -90,7 +91,7 @@ export class Receiver {
 			callbacks,
 		});
 	}
-	clearChain(chainName: string) {
+	clearChain(chainName: number) {
 		this.chainInfo[chainName]?.forEach((route) => {
 			this.store[route.method] = this.store[route.method].filter((r: ReceiverRoute) => r.callbacks !== route.callbacks);
 		});
