@@ -311,3 +311,4 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 export type { RouterRequest, RouterResponse } from './router';
 export { Router } from './router';
 export { InMemoryMessageDistributor };
+export { ApiError } from './utils';

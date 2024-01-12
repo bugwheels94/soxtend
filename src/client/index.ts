@@ -119,6 +119,7 @@ export class SoxtendClient<
 		options: T extends string ? SoxtendClientOptions<Deserialize, Serialize> : Options<Deserialize, Serialize> = {}
 	) {
 		super();
+
 		this.receiver = new Receiver();
 		const { serialize, deserialize } = options;
 		this.serialize = serialize || (((string) => JSON.stringify(string)) as Serialize);
