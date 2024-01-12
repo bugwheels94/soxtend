@@ -239,7 +239,6 @@ export class Router {
 				response.status(500);
 				response.send(null);
 			}
-			console.log(error);
 		}
 	}
 }
