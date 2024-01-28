@@ -2,7 +2,7 @@ import WebSocket from 'isomorphic-ws';
 import { Socket } from './client';
 import { ServerOptions } from 'ws';
 import crypto from 'crypto';
-import { MessageDistributor, InMemoryMessageDistributor } from './distributor';
+import { MessageDistributor } from './distributor';
 // import { MessageStore } from './messageStore';
 import EventEmitter from 'events';
 import { IndividualSocketConnectionStore, SocketGroupStore } from './localStores';
@@ -75,7 +75,7 @@ const encoder = new TextEncoder();
 export class SoxtendServer<DataSentOverWire extends AllowedType = string> extends EventEmitter {
 	serverId: string;
 	rawWebSocketServer: WebSocket.Server;
-	private distributor?: MessageDistributor<DataSentOverWire>;
+	distributor?: MessageDistributor<DataSentOverWire>;
 	eventStore: Record<
 		SoxtendServerEvents,
 		{
@@ -139,10 +139,6 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 		this.distributor.enqueue(`i:${server}`, messageWithGroupId);
 	}
 	private async sendMessageAsStringToGroup(id: string, message: Parameters<Serialize>[0]) {
-		// this.socketGroupStore.find(id)?.forEach((socket) => {
-		// 	socket.send(message);
-		// });
-
 		const serializedMessage = this.serialize(message) as Uint8Array;
 
 		const servers = await this.distributor.getListItems(`group-servers:${id}`);
@@ -154,7 +150,22 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 	}
 	private serialize: Serialize<DataSentOverWire>;
 	private deserialize: Deserialize;
-
+	private async listenToGroupQueue(queueName: string) {
+		// `g:${serverId}`
+		if (!this.distributor) return;
+		this.distributor.listen(queueName, (groupId, message) => {
+			this.socketGroupStore.find(groupId)?.forEach((socket) => {
+				socket.rawSocket.send(message);
+			});
+		});
+	}
+	private async listenToIndividualQueue(queueName: string) {
+		// `i:${serverId}`
+		if (!this.distributor) return;
+		this.distributor.listen(queueName, (connectionId, message) => {
+			this.individualSocketConnectionStore.find(connectionId).rawSocket.send(message);
+		});
+	}
 	constructor(
 		options: ServerOptions & {
 			distributor?: MessageDistributor<DataSentOverWire>;
@@ -199,7 +210,11 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 				this.rawWebSocketServer = new WebSocket.Server(options);
 				this.emit('ready');
 				this.rawWebSocketServer.on('connection', (rawSocket) => {
-					const socket = new Socket<DataSentOverWire>(rawSocket, { mode, serialize: this.serialize });
+					const socket = new Socket<DataSentOverWire>(rawSocket, {
+						mode,
+						serialize: this.serialize,
+						server: this,
+					});
 					const newConnection = async (buffer: Buffer) => {
 						const data = buffer.toString();
 						let connectionId: string;
@@ -210,8 +225,8 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 						} else {
 							connectionId = data;
 							socket.setId(connectionId);
-							const groups = await this.getGroups(connectionId);
-							this.joinGroups(groups, socket);
+							const groups = await socket.getAllGroups();
+							socket.joinGroups(groups);
 						}
 						rawSocket.send(connectionId);
 						this.emit('connection', socket);
@@ -244,61 +259,6 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 			.catch((e) => console.error(e));
 	}
 
-	async listenToGroupQueue(queueName: string) {
-		// `g:${serverId}`
-		if (!this.distributor) return;
-		this.distributor.listen(queueName, (groupId, message) => {
-			this.socketGroupStore.find(groupId)?.forEach((socket) => {
-				socket.rawSocket.send(message);
-			});
-		});
-	}
-	async listenToIndividualQueue(queueName: string) {
-		// `i:${serverId}`
-		if (!this.distributor) return;
-		this.distributor.listen(queueName, (connectionId, message) => {
-			this.individualSocketConnectionStore.find(connectionId).rawSocket.send(message);
-		});
-	}
-
-	async joinGroup(id: string, socket: Socket<DataSentOverWire>) {
-		this.socketGroupStore.add(socket, id);
-		if (!this.distributor) return undefined;
-		return Promise.all([
-			this.distributor.addListItem(`my-groups:${socket.id}`, id),
-			this.distributor.addListItem(`group-servers:${id}`, this.serverId),
-		]);
-	}
-	async joinGroups(groupdIds: Iterable<string>, socket: Socket<DataSentOverWire>) {
-		for (let groupId of groupdIds) {
-			this.socketGroupStore.add(socket, groupId);
-			this.distributor.addListItem(`group-servers:${groupId}`, this.serverId);
-		}
-		this.distributor.addListItems(`my-groups:${socket.id}`, groupdIds);
-	}
-	async leaveGroup(groupId: string, socket: Socket<DataSentOverWire>) {
-		this.socketGroupStore.remove(socket, groupId);
-
-		return this.distributor.removeListItem(`my-groups:${socket.id}`, groupId);
-	}
-	async leaveAllGroups(socket: Socket<DataSentOverWire>) {
-		const groups = await this.distributor.getListItems(`my-groups:${socket.id}`);
-		for (let group of groups) {
-			this.socketGroupStore.remove(socket, group);
-		}
-		this.distributor.removeListItems(`my-groups:${socket.id}`, groups);
-	}
-	async leaveGroups(groups: string[], socket: Socket<DataSentOverWire>) {
-		for (let group of groups) {
-			this.socketGroupStore.remove(socket, group);
-		}
-
-		return Promise.all([this.distributor.removeListItems(`my-groups:${socket.id}`, groups)]);
-	}
-	async getGroups(connectionId: string) {
-		return this.distributor.getListItems(`my-groups:${connectionId}`);
-	}
-
 	addListener(method: 'connection', listener: (socket: Socket<DataSentOverWire>) => void): this;
 	addListener(method: 'close', listener: (socket: Socket<DataSentOverWire>) => void): this;
 	addListener(method: 'ready', listener: () => void): this;
@@ -308,7 +268,3 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 		return this;
 	}
 }
-export type { RouterRequest, RouterResponse } from './router';
-export { Router } from './router';
-export { InMemoryMessageDistributor };
-export { ApiError } from './utils';

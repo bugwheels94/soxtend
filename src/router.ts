@@ -91,16 +91,16 @@ function createSelfResponse(instance: Socket, message: RouterRequest, server: So
 	let hasStatusBeenSet = false;
 	return {
 		joinGroup: async (groupId: string) => {
-			return server.joinGroup(groupId, instance);
+			return instance.joinGroup(groupId);
 		},
 		leaveGroup: async (groupId: string) => {
-			return server.leaveGroup(groupId, instance);
+			return instance.leaveGroup(groupId);
 		},
 		leaveGroups: async (groups: string[]) => {
-			return server.leaveGroups(groups, instance);
+			return instance.leaveGroups(groups);
 		},
 		leaveAllGroups: async () => {
-			return server.leaveAllGroups(instance);
+			return instance.leaveAllGroups();
 		},
 		_status: 200,
 		_url: String,
@@ -242,3 +242,4 @@ export class Router {
 		}
 	}
 }
+export { ApiError } from './utils';

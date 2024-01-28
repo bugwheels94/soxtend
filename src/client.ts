@@ -4,6 +4,7 @@ import HttpStatusCode from './statusCodes';
 import crypto from 'crypto';
 import EventEmitter from 'events';
 import { AllowedType, JsonObject, Serialize } from './utils';
+import { SoxtendServer } from '.';
 
 export type ClientResponse = {
 	_id: number;
@@ -38,6 +39,7 @@ export class Socket<DataSentOverWire extends AllowedType = string> extends Event
 	rawSocket: WebSocket;
 	// store?: MessageStore | undefined;
 	groups: Set<string> = new Set();
+	server: SoxtendServer<DataSentOverWire>;
 	send(object: JsonObject) {
 		const serializedMessage = this.serialize(object);
 		//@ts-ignore
@@ -49,11 +51,12 @@ export class Socket<DataSentOverWire extends AllowedType = string> extends Event
 	constructor(
 		socket: WebSocket,
 		{
+			server,
 			mode,
 			serialize,
 		}: {
 			serialize: Serialize<DataSentOverWire>;
-
+			server: SoxtendServer<DataSentOverWire>;
 			mode: 'string' | 'Uint8Array';
 		} // , store?: MessageStore
 	) {
@@ -61,10 +64,49 @@ export class Socket<DataSentOverWire extends AllowedType = string> extends Event
 		this.serialize = serialize;
 
 		this.mode = mode;
-
 		this.rawSocket = socket;
+		this.server = server;
 		// this.store = store;
 		this.id = crypto.randomUUID();
 	}
 	addListener: (method: 'message', listener: (message: JsonObject) => void) => this;
+
+	public async joinGroup(groupId: string) {
+		this.server.socketGroupStore.add(this, groupId);
+		if (!this.server.distributor) return undefined;
+		return Promise.all([
+			this.server.distributor.addListItem(`my-groups:${this.id}`, groupId),
+			this.server.distributor.addListItem(`group-servers:${groupId}`, this.server.serverId),
+		]);
+	}
+
+	async joinGroups(groupdIds: Iterable<string>) {
+		for (let groupId of groupdIds) {
+			this.server.socketGroupStore.add(this, groupId);
+			this.server.distributor.addListItem(`group-servers:${groupId}`, this.server.serverId);
+		}
+		this.server.distributor.addListItems(`my-groups:${this.id}`, groupdIds);
+	}
+	async leaveGroup(groupId: string) {
+		this.server.socketGroupStore.remove(this, groupId);
+
+		return this.server.distributor.removeListItem(`my-groups:${this.id}`, groupId);
+	}
+	async leaveAllGroups() {
+		const groups = await this.server.distributor.getListItems(`my-groups:${this.id}`);
+		for (let group of groups) {
+			this.server.socketGroupStore.remove(this, group);
+		}
+		this.server.distributor.removeListItems(`my-groups:${this.id}`, groups);
+	}
+	async leaveGroups(groups: string[]) {
+		for (let group of groups) {
+			this.server.socketGroupStore.remove(this, group);
+		}
+
+		return Promise.all([this.server.distributor.removeListItems(`my-groups:${this.id}`, groups)]);
+	}
+	async getAllGroups() {
+		return this.server.distributor.getListItems(`my-groups:${this.id}`);
+	}
 }

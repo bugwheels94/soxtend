@@ -9,11 +9,23 @@
 			"default": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
-		"./redis-distributor": {
-			"types": "./dist/types/distributor/index.d.ts",
+		"./router": {
+			"types": "./dist/types/router.d.ts",
+			"import": "./dist/esm/router.js",
+			"default": "./dist/esm/router.js",
+			"require": "./dist/cjs/router.js"
+		},
+		"./redisDistributor": {
+			"types": "./dist/types/distributor/redis.d.ts",
 			"import": "./dist/esm/distributor/redis.js",
 			"default": "./dist/esm/distributor/redis.js",
 			"require": "./dist/cjs/distributor/redis.js"
+		},
+		"./inMemoryDistributor": {
+			"types": "./dist/types/distributor/inMemory.d.ts",
+			"import": "./dist/esm/distributor/inMemory.js",
+			"default": "./dist/esm/distributor/inMemory.js",
+			"require": "./dist/cjs/distributor/inMemory.js"
 		},
 		"./client": {
 			"types": "./dist/types/client/index.d.ts",
