@@ -305,3 +305,4 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 }
 export type { Socket } from './client';
 export { ApiError } from './utils';
+export type { JsonObject } from './utils';
