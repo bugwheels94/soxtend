@@ -21,7 +21,7 @@ export type ReceiverCallback<P extends object = object> = (
 export type ReceiverRoute = {
 	literalRoute: string;
 	match: MatchFunction<any>;
-	callbacks: ReceiverCallback[];
+	callbacks: ReceiverCallback<any>[];
 };
 export type ReceiverRequest<P extends object = object> = {} & MatchResult<P>;
 
@@ -59,7 +59,7 @@ export class ListenersStore {
 	stopListening() {
 		this.receiver.clearChain(this.id);
 	}
-	removeListener(method: Method, callback: ReceiverCallback) {
+	removeListener(method: MethodEnum, callback: ReceiverCallback) {
 		this.receiver.store[method] = this.receiver.store[method].map((route: ReceiverRoute) => {
 			if (route.callbacks.includes(callback)) {
 				route.callbacks = route.callbacks.filter((c) => c !== callback);
@@ -79,7 +79,7 @@ export class Receiver {
 		[MethodEnum.DELETE]: [],
 		[MethodEnum.META]: [],
 	};
-	registerRoute(method: MethodEnum, url: string, chain: number, ...callbacks: ReceiverCallback[]) {
+	registerRoute<T extends object>(method: MethodEnum, url: string, chain: number, ...callbacks: ReceiverCallback<T>[]) {
 		this.chainInfo[chain] = this.chainInfo[chain] || [];
 		this.chainInfo[chain].push({
 			method,
@@ -93,14 +93,17 @@ export class Receiver {
 	}
 	clearChain(chainName: number) {
 		this.chainInfo[chainName]?.forEach((route) => {
-			this.store[route.method] = this.store[route.method].filter((r: ReceiverRoute) => r.callbacks !== route.callbacks);
+			const method: MethodEnum = route.method;
+			this.store[method] = this.store[method].filter((r: ReceiverRoute) => r.callbacks !== route.callbacks);
 		});
 		delete this.chainInfo[chainName];
 	}
 	async listener(message: Omit<ParsedServerMessage, '_id'>) {
 		// Message is coming from router to client and execution should be skipped
 		if ('_id' in message) return;
-		let store: ReceiverStore[MethodEnum.GET] = this.store[message.method];
+		const method: MethodEnum = message.method;
+
+		let store: ReceiverStore[MethodEnum.GET] = this.store[method];
 		try {
 			for (let i = 0; i < store.length; i += 1) {
 				const matched = store[i].match(message.url);

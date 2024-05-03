@@ -1,6 +1,6 @@
 import WebSocket from 'isomorphic-ws';
 import { MethodEnum } from './utils';
-import { SoxtendClient, X } from '.';
+import { SoxtendClient } from '.';
 import { ListenersStore, Receiver } from './receiver';
 export type ParsedServerMessage = {
 	method: number;
@@ -26,9 +26,8 @@ export type ClientPromiseStore = Record<
 	}
 >;
 
-export class Client<MyWebSocketPlus extends SoxtendClient<X>> {
+export class Client<MyWebSocketPlus extends SoxtendClient> {
 	id: number = 0;
-	socket: WebSocket;
 	promiseStore: ClientPromiseStore = {};
 	receiver: Receiver;
 	constructor(private websocketPlus: MyWebSocketPlus) {
@@ -74,9 +73,6 @@ export class Client<MyWebSocketPlus extends SoxtendClient<X>> {
 	}
 	meta(url: string, options?: ClientRequest) {
 		return this.method(MethodEnum.META, url, options);
-	}
-	setSocket(socket: WebSocket) {
-		this.socket = socket;
 	}
 	async listener(message: ParsedServerMessage) {
 		// Message is coming from client to router and execution should be skipped

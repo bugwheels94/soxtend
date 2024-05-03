@@ -1,15 +1,20 @@
 import { commandOptions, RedisClientType, createClient } from 'redis';
 import { MessageDistributor } from '.';
+import { AllowedType, DataMapping } from '../utils';
 
 const decoder = new TextDecoder();
 
-export class RedisMessageDistributor<T> implements MessageDistributor<T, string[]> {
+// @ts-ignore
+export class RedisMessageDistributor<T extends AllowedType = 'string'> implements MessageDistributor<T, string[]> {
+	// @ts-ignore
 	redisClient: RedisClientType;
 	initialized?: boolean;
-	mode?: 'string' | 'Uint8Array';
+	messageType?: T;
 	constructor(private url: string) {}
-	enqueue: (queueId: string, message: T) => Promise<void>;
-	listen: (queueId: string, callback: (receiverId: string, message: T) => void) => void;
+	// @ts-ignore
+	enqueue: (queueId: string, message: DataMapping<T>) => void;
+	// @ts-ignore
+	listen: (channel: string, callback: (_s: DataMapping<T>) => void) => void;
 	async initialize(_serverId: string) {
 		const client = createClient({
 			url: this.url,
@@ -22,7 +27,7 @@ export class RedisMessageDistributor<T> implements MessageDistributor<T, string[
 		// @ts-ignore
 		this.redisClient = client;
 
-		if (this.mode === 'Uint8Array') {
+		if (this.messageType === 'binary') {
 			// @ts-ignore
 			this.enqueue = this.enqueueBuffer;
 			// @ts-ignore
@@ -35,12 +40,13 @@ export class RedisMessageDistributor<T> implements MessageDistributor<T, string[
 		}
 	}
 	async enqueueString(queueId: string, message: string) {
-		this.redisClient.rPush(queueId, message);
+		console.log('distributor sending to', queueId, message);
+		this.redisClient.publish(queueId, message);
 	}
 	async enqueueBuffer(queueId: string, message: Uint8Array) {
 		const buffer = message.buffer;
 		const length = buffer.byteLength;
-		this.redisClient.rPush(commandOptions({ returnBuffers: true }), queueId, Buffer.from(buffer, 0, length));
+		this.redisClient.publish(commandOptions({ returnBuffers: true }), queueId, Buffer.from(buffer, 0, length));
 	}
 	async addListItem(listId: string, item: string) {
 		return this.redisClient.sAdd(listId, item);
@@ -51,6 +57,7 @@ export class RedisMessageDistributor<T> implements MessageDistributor<T, string[
 	async getListItems(listId: string) {
 		return this.redisClient.sMembers(listId);
 	}
+
 	async removeListItem(listId: string, item: string) {
 		return this.redisClient.sRem(listId, item);
 	}
@@ -64,49 +71,51 @@ export class RedisMessageDistributor<T> implements MessageDistributor<T, string[
 	async get(key: string) {
 		return this.redisClient.get(key);
 	}
-
-	async listenString(channel: string, callback: (_: string, _s: string) => void) {
-		const redisClient = createClient({
-			url: this.url,
-		});
-		await redisClient.connect();
-		while (true) {
-			try {
-				const pp = redisClient.blPop(channel, 0);
-				const result = await pp;
-				if (!result) continue;
-				const { element: message } = result;
-				const separator = message.indexOf(':');
-				const id = message.substring(0, separator);
-				const remaining = message.substring(separator + 1, message.length);
-
-				callback(id, remaining);
-			} catch (e) {
-				console.log(e);
-			}
-		}
+	async remove(key: string) {
+		return this.redisClient.del(key);
 	}
-	async listenBuffer(channel: string, callback: (_: string, _s: Uint8Array) => void) {
+
+	async listenString(channel: string, callback: (_s: string) => void) {
 		const redisClient = createClient({
 			url: this.url,
 		});
 		await redisClient.connect();
-		while (true) {
-			try {
-				const pp = redisClient.blPop(commandOptions({ returnBuffers: true }), channel, 0);
-				const result = await pp;
-				if (!result) continue;
-				const { element: message } = result;
-				const finalMessage = new Uint8Array(message);
-				const groupLength = finalMessage[0];
-				const id = decoder.decode(finalMessage.subarray(1, 1 + groupLength));
+		redisClient.subscribe(channel, (message) => {
+			callback(message);
+		});
+	}
+	// async listenString(channel: string, callback: (_: string, _s: string) => void) {
+	// 	const redisClient = createClient({
+	// 		url: this.url,
+	// 	});
+	// 	await redisClient.connect();
+	// 	while (true) {
+	// 		try {
+	// 			const pp = redisClient.blPop(channel, 0);
+	// 			const result = await pp;
+	// 			if (!result) continue;
+	// 			const { element: message } = result;
+	// 			const separator = message.indexOf(':');
+	// 			const id = message.substring(0, separator);
+	// 			const remaining = message.substring(separator + 1, message.length);
 
-				const remaining = finalMessage.subarray(1 + groupLength, finalMessage.length);
-
-				callback(id, remaining);
-			} catch (e) {
-				console.log(e);
-			}
-		}
+	// 			callback(id, remaining);
+	// 		} catch (e) {
+	// 			console.log(e);
+	// 		}
+	// 	}
+	// }
+	async listenBuffer(channel: string, callback: (_s: Uint8Array) => void) {
+		const redisClient = createClient({
+			url: this.url,
+		});
+		await redisClient.connect();
+		redisClient.subscribe(
+			channel,
+			(message) => {
+				callback(message);
+			},
+			true
+		);
 	}
 }

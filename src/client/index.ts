@@ -4,14 +4,12 @@ import { Receiver } from './receiver';
 import { JsonObject } from './utils';
 import { DefaultDeserialize, DefaultSerialize, FlexibleDeserialize, FlexibleSerialize } from './utils';
 
-export type X = WebSocket | string;
 type SoxtendClientOptions<
 	Deserialize extends FlexibleDeserialize = DefaultDeserialize,
 	Serialize extends FlexibleSerialize = DefaultSerialize
 > = {
 	firstReconnectDelay?: number;
 	maxReconnectDelay?: number;
-	connectWithDelay?: number;
 	serialize?: Serialize;
 	deserialize?: Deserialize;
 };
@@ -19,15 +17,20 @@ type Options<
 	Deserialize extends FlexibleDeserialize = DefaultDeserialize,
 	Serialize extends FlexibleSerialize = DefaultSerialize
 > = ClientOptions & SoxtendClientOptions<Deserialize, Serialize>;
-
+class SoxtendClientEvent extends Event {
+	detail: any;
+	constructor(message: string, data: any) {
+		super(message, data);
+		this.detail = data;
+	}
+}
 export class SoxtendClient<
-	T extends X,
 	Deserialize extends FlexibleDeserialize = DefaultDeserialize,
 	Serialize extends FlexibleSerialize = DefaultSerialize
 > extends EventTarget {
 	receiver: Receiver;
 	lastMessageId?: number;
-	connectionId: string;
+	connectionId: string = '';
 	socket: WebSocket;
 	currentReconnectDelay: number = 100;
 	url: string;
@@ -36,9 +39,9 @@ export class SoxtendClient<
 		const socket: WebSocket = new WebSocket(this.url, this.url.split(':')[0], nativeOptions);
 		socket.binaryType = 'arraybuffer';
 		this.socket = socket;
-		socket.addEventListener('open', () => this.onWebsocketOpen({ socket, firstReconnectDelay, maxReconnectDelay }));
+		socket.addEventListener('open', (e) => this.onWebsocketOpen(e, { socket, firstReconnectDelay, maxReconnectDelay }));
 		socket.addEventListener('close', (event) =>
-			this.onWebsocketClose({ event, ...nativeOptions, firstReconnectDelay, maxReconnectDelay, socket })
+			this.onWebsocketClose(event, { ...nativeOptions, firstReconnectDelay, maxReconnectDelay, socket })
 		);
 		return socket;
 	}
@@ -59,38 +62,38 @@ export class SoxtendClient<
 			}
 		});
 	}
-	private active: boolean;
-	onWebsocketOpen(options: SoxtendClientOptions<Deserialize, Serialize> & { socket: WebSocket }) {
-		this.emit('open', '');
-		this.currentReconnectDelay = options.firstReconnectDelay;
-		// this.client.setSocket(options.socket);
-		this.socket.send(this.connectionId || '');
-		const newConnection = ({ data }) => {
-			this.connectionId = data;
+	private active: boolean = false;
+	onWebsocketOpen(e: WebSocket.Event, options: SoxtendClientOptions<Deserialize, Serialize> & { socket: WebSocket }) {
+		this.emit('open', e);
+		this.currentReconnectDelay = options.firstReconnectDelay || 0;
+		if (!this.socket) return;
+		this.socket.send(this.connectionId);
+		const newConnection = ({ data }: WebSocket.MessageEvent) => {
+			this.connectionId = data.toString();
 			this.active = true;
 			this.onSocketCreated(options.socket);
-			this.socket.removeEventListener('message', newConnection);
+			if (this.socket) this.socket.removeEventListener('message', newConnection);
 		};
 		this.socket.addEventListener('message', newConnection);
-		if (this.lastMessageId) this.socket;
 	}
 
 	onWebsocketClose(
-		options: SoxtendClientOptions<Deserialize, Serialize> & { socket: WebSocket; event: WebSocket.CloseEvent }
+		event: WebSocket.CloseEvent,
+		options: SoxtendClientOptions<Deserialize, Serialize> & { socket: WebSocket }
 	) {
-		this.socket = null;
-		if (!options.event.wasClean) {
+		this.active = false;
+		if (!event.wasClean) {
 			setTimeout(() => {
 				this.reconnectToWebsocket(options);
 			}, this.currentReconnectDelay);
 		}
 	}
 	reconnectToWebsocket(options: Options<Deserialize, Serialize>) {
-		this.currentReconnectDelay = Math.min(this.currentReconnectDelay * 2, options.maxReconnectDelay);
+		this.currentReconnectDelay = Math.min(this.currentReconnectDelay * 2, options.maxReconnectDelay || 5 * 1000);
 		this.connect(options);
 	}
 	emit(eventName: string, data: any) {
-		const event = new CustomEvent(eventName, { detail: data });
+		const event = new SoxtendClientEvent(eventName, data);
 		this.dispatchEvent(event);
 	}
 	pendingMessageStore: ReturnType<Serialize>[] = [];
@@ -106,18 +109,18 @@ export class SoxtendClient<
 			this.socket.send(s);
 		}
 	}
-	addEventListener(event: 'message', callback: (event: CustomEvent) => void);
-	addEventListener(method: string, listener: (e?: CustomEvent) => void): this {
-		super.addEventListener(method, listener);
+	// @ts-ignore
+	addEventListener(event: 'message', callback: (event: SoxtendClientEvent) => void);
+	// @ts-ignore
+	addEventListener(method: string, callback: (e?: SoxtendClientEvent) => void): this {
+		// @ts-ignore
+		super.addEventListener(method, callback);
 		return this;
 	}
 	close() {
 		this.socket.close();
 	}
-	constructor(
-		urlOrSocket: T,
-		options: T extends string ? SoxtendClientOptions<Deserialize, Serialize> : Options<Deserialize, Serialize> = {}
-	) {
+	constructor(urlOrSocket: string, options: Options<Deserialize, Serialize>) {
 		super();
 
 		this.receiver = new Receiver();
@@ -131,23 +134,13 @@ export class SoxtendClient<
 			});
 
 		let socket: WebSocket;
-		if (typeof urlOrSocket === 'string') {
-			this.url = urlOrSocket;
-			if (options.connectWithDelay) {
-				setTimeout(() => {
-					socket = this.connect(options);
-				}, options.connectWithDelay);
-			} else socket = this.connect(options);
-		} else {
-			socket = urlOrSocket;
-			this.onWebsocketOpen({ ...options, socket });
-		}
-		if (this.serialize({}) instanceof Uint8Array) {
-			socket.binaryType = 'arraybuffer';
-		}
+		this.url = urlOrSocket;
+		const { firstReconnectDelay = 100, maxReconnectDelay = 30000, ...nativeOptions } = options;
 
-		if (options.connectWithDelay) return;
-		this.socket = socket;
+		this.socket = this.connect(options);
+		if (this.serialize({}) instanceof Uint8Array) {
+			this.socket.binaryType = 'arraybuffer';
+		}
 	}
 }
 export type { ClientRequest } from './client';

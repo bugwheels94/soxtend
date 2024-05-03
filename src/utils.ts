@@ -20,9 +20,11 @@ export class ApiError extends Error {
 		this.status = status;
 	}
 }
-export type JsonObject = {
-	[key: string]: string | number | boolean | null | JsonObject | JsonObject[];
-};
+export type JsonObject =
+	| string
+	| {
+			[key: string]: string | number | boolean | null | JsonObject | JsonObject[];
+	  };
 export type Method = 'get' | 'put' | 'patch' | 'post' | 'delete' | 'meta';
 export const store: Record<string | number, WebSocket[]> = {};
 export enum MethodEnum {
@@ -33,8 +35,10 @@ export enum MethodEnum {
 	DELETE,
 	META,
 }
-export type AllowedType = string | Uint8Array;
-export type Serialize<DataSentOverWire extends AllowedType = string> = (message: JsonObject) => DataSentOverWire;
+export type AllowedType = 'string' | 'binary';
+export type DataMapping<T> = T extends 'string' ? string : T extends 'binary' ? Uint8Array : never;
+
+export type Serialize<T> = (message: JsonObject) => T;
 export type Deserialize = (_: Buffer) => JsonObject;
 export type DefaultSerialize = (_: JsonObject) => string;
 export type FlexibleSerialize = (_: JsonObject) => AllowedType;
@@ -68,7 +72,7 @@ export function deserialize(data: Buffer) {
 		const headerLength = ui8[index++] * 255 + ui8[index++];
 		header = JSON.parse(decoder.decode(ui8.subarray(index, index + headerLength)));
 		index += headerLength;
-	}
+	} else header = {};
 	const dataType = index < ui8.length ? ui8[index] : -1;
 	const rawData = dataType !== -1 ? ui8.subarray(index + 1, ui8.length) : null;
 	let message: any;
@@ -113,7 +117,7 @@ export function serialize({
 	 */
 	const headerEncoded = headers ? encoder.encode(JSON.stringify(headers)) : '';
 
-	let binaryPayload: Uint8Array | undefined = undefined;
+	let binaryPayload: Uint8Array;
 	let dataType: null | DataType = null;
 	if (data instanceof Uint8Array) {
 		binaryPayload = data;
@@ -124,7 +128,7 @@ export function serialize({
 	} else if (data) {
 		dataType = DataType.JSON;
 		binaryPayload = encoder.encode(JSON.stringify(data));
-	}
+	} else binaryPayload = new Uint8Array();
 
 	const urlEncoded = encoder.encode(url);
 

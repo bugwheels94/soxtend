@@ -1,22 +1,19 @@
 import EventEmitter from 'events';
 import { MessageDistributor } from '.';
-import { AllowedType } from '../utils';
-const decoder = new TextDecoder();
+import { AllowedType, DataMapping } from '../utils';
 
-export class InMemoryMessageDistributor<T extends AllowedType = string> implements MessageDistributor<T> {
+export class InMemoryMessageDistributor<T extends AllowedType = 'string'> implements MessageDistributor<T> {
 	initialized?: boolean;
 	list: Map<string, Set<string>> = new Map();
-	mode?: 'string' | 'Uint8Array';
+	messageType?: T;
 
 	keyStore: Map<string, string> = new Map();
 	eventEmitter = new EventEmitter();
 	constructor() {}
-	enqueue: (queueId: string, message: T) => Promise<void>;
-	listen: (queueId: string, callback: (receiverId: string, message: T) => void) => void;
 
 	async initialize() {
 		this.initialized = true;
-		if (this.mode === 'Uint8Array') {
+		if (this.messageType === 'binary') {
 			// @ts-ignore
 			this.enqueue = this.enqueueBuffer;
 			// @ts-ignore
@@ -30,12 +27,13 @@ export class InMemoryMessageDistributor<T extends AllowedType = string> implemen
 	}
 
 	async addListItem(listId: string, item: string) {
-		if (this.list.has(listId)) this.list.get(listId).add(item);
+		if (this.list.has(listId)) this.list.get(listId)?.add(item);
 		else this.list.set(listId, new Set([item]));
 	}
 	async addListItems(listId: string, items: Iterable<string>) {
 		if (!this.list.has(listId)) this.list.set(listId, new Set());
 		const list = this.list.get(listId);
+		if (!list) return;
 		for (const item of items) list.add(item);
 	}
 	async getListItems(listId: string) {
@@ -47,6 +45,7 @@ export class InMemoryMessageDistributor<T extends AllowedType = string> implemen
 	async removeListItems(listId: string, items: Iterable<string>) {
 		if (!this.list.has(listId)) return;
 		const list = this.list.get(listId);
+		if (!list) return;
 		for (const item of items) list.delete(item);
 	}
 	async removeList(listId: string) {
@@ -59,29 +58,15 @@ export class InMemoryMessageDistributor<T extends AllowedType = string> implemen
 	async get(key: string) {
 		return this.keyStore.get(key);
 	}
-	async enqueueBuffer(queueId: string, message: Uint8Array) {
+	async remove(key: string) {
+		this.keyStore.delete(key);
+	}
+	async enqueue(queueId: string, message: DataMapping<T>) {
 		this.eventEmitter.emit(queueId, message);
 	}
-	async enqueueString(queueId: string, message: string) {
-		this.eventEmitter.emit(queueId, message);
-	}
-	async listenBuffer(channel: string, callback: (_: string, _s: Uint8Array) => void) {
-		this.eventEmitter.on(channel, (message: Uint8Array) => {
-			const finalMessage = new Uint8Array(message);
-			const groupLength = finalMessage[0];
-			const id = decoder.decode(finalMessage.subarray(1, 1 + groupLength));
-
-			const remaining = finalMessage.subarray(1 + groupLength, finalMessage.length);
-
-			callback(id, remaining);
-		});
-	}
-	async listenString(channel: string, callback: (_: string, _s: string) => void) {
-		this.eventEmitter.on(channel, (message: string) => {
-			const separator = message.indexOf(':');
-			const id = message.substring(0, separator);
-			const remaining = message.substring(separator + 1, message.length);
-			callback(id, remaining);
+	async listen(channel: string, callback: (_s: DataMapping<T>) => void) {
+		this.eventEmitter.on(channel, (message: DataMapping<T>) => {
+			callback(message);
 		});
 	}
 }

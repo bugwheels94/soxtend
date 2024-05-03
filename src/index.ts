@@ -6,7 +6,8 @@ import { MessageDistributor } from './distributor';
 // import { MessageStore } from './messageStore';
 import EventEmitter from 'events';
 import { IndividualSocketConnectionStore, SocketGroupStore } from './localStores';
-import { AllowedType, Deserialize, JsonObject, Serialize } from './utils';
+import { AllowedType, DataMapping, Deserialize, JsonObject, Serialize } from './utils';
+import { SERVERS_HAVING_GROUP, SERVER_MESSAGES_GROUP_QUEUE } from './constants';
 type SoxtendServerEvents = 'connection' | 'close';
 
 declare global {
@@ -72,10 +73,11 @@ const encoder = new TextEncoder();
 // }
 // }
 
-export class SoxtendServer<DataSentOverWire extends AllowedType = string> extends EventEmitter {
+const decoder = new TextDecoder();
+export class SoxtendServer<MessageType extends AllowedType = 'string'> extends EventEmitter {
 	serverId: string;
 	rawWebSocketServer: WebSocket.Server;
-	distributor?: MessageDistributor<DataSentOverWire>;
+	distributor: MessageDistributor<MessageType, any>;
 	eventStore: Record<
 		SoxtendServerEvents,
 		{
@@ -85,11 +87,11 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 		connection: [],
 		close: [],
 	};
-	socketGroupStore: SocketGroupStore<DataSentOverWire>;
-	individualSocketConnectionStore: IndividualSocketConnectionStore<DataSentOverWire>;
-	sendToIndividual: (individualId: string, message: Parameters<Serialize>[0]) => Promise<void>;
-	sendToGroup: (groupId: string, message: Parameters<Serialize>[0]) => Promise<void>;
-	private async sendMessageAsBufferToIndividual(id: string, message: Parameters<Serialize>[0]) {
+	socketGroupStore: SocketGroupStore<MessageType>;
+	individualSocketConnectionStore: IndividualSocketConnectionStore<MessageType>;
+	sendToIndividual: (individualId: string, message: JsonObject) => Promise<void>;
+	sendToGroup: (groupId: string, message: JsonObject) => Promise<void>;
+	private async sendMessageAsBufferToIndividual(id: string, message: JsonObject) {
 		const socket = this.individualSocketConnectionStore.find(id);
 		const serializedMessage = this.serialize(message) as Uint8Array;
 		if (socket) {
@@ -100,31 +102,28 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 
 		const server = await this.distributor.get(`i:${id}`);
 		const groupArray = encoder.encode(id);
-		const messageWithGroupId = new Uint8Array(serializedMessage.length + 1 + groupArray.length);
+		const messageWithGroupId = new Uint8Array(serializedMessage.length + groupArray.length + 1);
 		messageWithGroupId[0] = groupArray.length;
 		messageWithGroupId.set(groupArray, 1);
 		messageWithGroupId.set(serializedMessage, 1 + groupArray.length);
 		// @ts-ignore
-		this.distributor.enqueue(`i:${server}`, messageWithGroupId);
+		this.distributor.enqueue(`${server}`, messageWithGroupId);
 	}
-	private async sendMessageAsBufferToGroup(id: string, message: Parameters<Serialize>[0]) {
+	private async sendMessageAsBufferToGroup(id: string, message: JsonObject) {
 		// this.socketGroupStore.find(id)?.forEach((socket) => {
 		// 	socket.send(message);
 		// });
 		const serializedMessage = this.serialize(message) as Uint8Array;
 
-		const servers = await this.distributor.getListItems(`group-servers:${id}`);
 		const groupArray = encoder.encode(id);
-		const messageWithGroupId = new Uint8Array(serializedMessage.length + 1 + groupArray.length);
+		const messageWithGroupId = new Uint8Array(serializedMessage.length + groupArray.length + 1);
 		messageWithGroupId[0] = groupArray.length;
 		messageWithGroupId.set(groupArray, 1);
 		messageWithGroupId.set(serializedMessage, 1 + groupArray.length);
-		for (let server of servers) {
-			//@ts-ignore
-			this.distributor.enqueue(`server-messages:${server}`, messageWithGroupId); // send to the server oin group channel
-		}
+		//@ts-ignore
+		this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
 	}
-	private async sendMessageAsStringToIndividual(id: string, message: Parameters<Serialize>[0]) {
+	private async sendMessageAsStringToIndividual(id: string, message: JsonObject) {
 		const socket = this.individualSocketConnectionStore.find(id);
 		const serializedMessage = this.serialize(message) as string;
 		if (socket) {
@@ -136,40 +135,72 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 		const server = await this.distributor.get(`i:${id}`);
 		const messageWithGroupId = id + ':' + serializedMessage;
 		//@ts-ignore
-		this.distributor.enqueue(`i:${server}`, messageWithGroupId);
+		this.distributor.enqueue(`${server}`, messageWithGroupId);
 	}
-	private async sendMessageAsStringToGroup(id: string, message: Parameters<Serialize>[0]) {
+	private async sendMessageAsStringToGroup(id: string, message: JsonObject) {
 		const serializedMessage = this.serialize(message) as Uint8Array;
 
-		const servers = await this.distributor.getListItems(`group-servers:${id}`);
 		const messageWithGroupId = id + ':' + serializedMessage;
-		for (let server of servers) {
-			// @ts-ignore
-			this.distributor.enqueue(`server-messages:${server}`, messageWithGroupId); // send to the server oin group channel
-		}
+		// @ts-ignore
+		this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
 	}
-	private serialize: Serialize<DataSentOverWire>;
+	private serialize: Serialize<DataMapping<MessageType>>;
 	private deserialize: Deserialize;
-	private async listenToGroupQueue(queueName: string) {
-		// `g:${serverId}`
+
+	listenToGroupQueue: (queueId: string) => void;
+	listenToIndividualQueue: (queueId: string) => void;
+	private async listenToBufferGroupQueue(queueName: string) {
 		if (!this.distributor) return;
-		this.distributor.listen(queueName, (groupId, message) => {
-			this.socketGroupStore.find(groupId)?.forEach((socket) => {
-				socket.rawSocket.send(message);
+		// @ts-ignore
+		this.distributor.listen(queueName, (message: Uint8Array) => {
+			const finalMessage = new Uint8Array(message);
+			const groupLength = finalMessage[0];
+			const id = decoder.decode(finalMessage.subarray(1, 1 + groupLength));
+
+			const remaining = finalMessage.subarray(1 + groupLength, finalMessage.length);
+			this.socketGroupStore.find(id)?.forEach((socket) => {
+				socket.rawSocket.send(remaining);
 			});
 		});
 	}
-	private async listenToIndividualQueue(queueName: string) {
-		// `i:${serverId}`
+	private async listenToBufferIndividualQueue(queueName: string) {
 		if (!this.distributor) return;
-		this.distributor.listen(queueName, (connectionId, message) => {
-			this.individualSocketConnectionStore.find(connectionId).rawSocket.send(message);
+		// @ts-ignore
+		this.distributor.listen(queueName, (message: Uint8Array) => {
+			const finalMessage = new Uint8Array(message);
+			const groupLength = finalMessage[0];
+			const id = decoder.decode(finalMessage.subarray(1, 1 + groupLength));
+			const remaining = finalMessage.subarray(1 + groupLength, finalMessage.length);
+			this.individualSocketConnectionStore.find(id)?.rawSocket.send(remaining);
+		});
+	}
+
+	private async listenToStringIndividualQueue(queueName: string) {
+		if (!this.distributor) return;
+		// @ts-ignore
+		this.distributor.listen(queueName, (message: string) => {
+			const separator = message.indexOf(':');
+			const id = message.substring(1, separator);
+			const remaining = message.substring(separator + 1, message.length);
+			this.individualSocketConnectionStore.find(id)?.rawSocket.send(remaining);
+		});
+	}
+	private async listenToStringGroupQueue(queueName: string) {
+		if (!this.distributor) return;
+		// @ts-ignore
+		this.distributor.listen(queueName, (message: string) => {
+			const separator = message.indexOf(':');
+			const id = message.substring(0, separator);
+			const remaining = message.substring(separator + 1, message.length);
+			this.socketGroupStore.find(id)?.forEach((socket) => {
+				socket.rawSocket.send(remaining);
+			});
 		});
 	}
 	constructor(
 		options: ServerOptions & {
-			distributor?: MessageDistributor<DataSentOverWire>;
-			serialize?: Serialize<DataSentOverWire>;
+			distributor: MessageDistributor<MessageType, any>;
+			serialize?: Serialize<DataMapping<MessageType>>;
 			deserialize?: Deserialize;
 
 			// messageStore?: MessageStore;
@@ -177,58 +208,60 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 	) {
 		super();
 		const { distributor, serialize, deserialize } = options;
-		let mode: 'string' | 'Uint8Array' = 'string';
-		this.serialize = serialize || (((string: JsonObject) => JSON.stringify(string)) as Serialize<DataSentOverWire>);
+		// @ts-ignore
+		let messageType: MessageType = 'string';
+		this.serialize =
+			serialize || (((string: JsonObject) => JSON.stringify(string)) as Serialize<DataMapping<MessageType>>);
 		this.deserialize =
 			deserialize || (((string: Buffer) => JSON.parse(string.toString()) as JsonObject) as Deserialize);
 
 		if (this.serialize({}) instanceof Uint8Array) {
-			mode = 'Uint8Array';
+			// @ts-ignore
+			messageType = 'binary';
+			this.listenToGroupQueue = this.listenToBufferGroupQueue;
+			this.listenToIndividualQueue = this.listenToBufferIndividualQueue;
 			this.sendToIndividual = this.sendMessageAsBufferToIndividual;
 			this.sendToGroup = this.sendMessageAsBufferToGroup;
 		} else {
+			this.listenToGroupQueue = this.listenToStringGroupQueue;
+			this.listenToIndividualQueue = this.listenToStringIndividualQueue;
 			this.sendToIndividual = this.sendMessageAsStringToIndividual;
 			this.sendToGroup = this.sendMessageAsStringToGroup;
 		}
 		this.distributor = distributor;
-		this.distributor.mode = mode;
 		this.serverId = crypto.randomUUID();
 		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
-		this.socketGroupStore = new SocketGroupStore<DataSentOverWire>();
+		this.socketGroupStore = new SocketGroupStore<MessageType>();
+		this.rawWebSocketServer = new WebSocket.Server(options);
 
 		Promise.all([
 			this.distributor
 				? this.distributor.initialize(this.serverId, {
-						mode: 'string',
+						messageType,
 				  })
 				: undefined,
 			// options.messageStore ? options.messageStore.initialize(this.serverId) : undefined,
 		])
 			.then(() => {
-				this.listenToIndividualQueue(`i:${this.serverId}`);
-				this.listenToGroupQueue(`server-messages:${this.serverId}`);
-				this.rawWebSocketServer = new WebSocket.Server(options);
+				this.listenToIndividualQueue(`${this.serverId}`);
+				this.listenToGroupQueue(`broadcast`);
 				this.emit('ready');
-				this.rawWebSocketServer.on('connection', (rawSocket) => {
-					const socket = new Socket<DataSentOverWire>(rawSocket, {
-						mode,
+				this.rawWebSocketServer.on('connection', (rawSocket: WebSocket) => {
+					const socket = new Socket<MessageType>(rawSocket, {
+						mode: messageType,
 						serialize: this.serialize,
 						server: this,
 					});
 					const newConnection = async (buffer: Buffer) => {
 						const data = buffer.toString();
-						let connectionId: string;
-						if (!data) {
-							connectionId = crypto.randomUUID();
-							// @ts-ignore
-							socket.setId(connectionId);
-						} else {
-							connectionId = data;
-							socket.setId(connectionId);
-							const groups = await socket.getAllGroups();
-							socket.joinGroups(groups);
-						}
-						rawSocket.send(connectionId);
+
+						// Very hard to properly ensure if all groups will be restored hence completely skipping
+						// if (data) {
+						// 	const connectionId = data;
+						// 	const groups = await socket.getAllGroups(connectionId);
+						// 	socket.joinGroups(groups);
+						// }
+						rawSocket.send(socket.id);
 						this.emit('connection', socket);
 
 						rawSocket.addListener('message', (data) => {
@@ -252,6 +285,8 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 
 					rawSocket.addEventListener('close', () => {
 						this.emit('close');
+						socket.leaveAllGroups();
+						socket.clear();
 						// this.socketGroupStore.remove(socket);
 					});
 				});
@@ -259,8 +294,8 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 			.catch((e) => console.error(e));
 	}
 
-	addListener(method: 'connection', listener: (socket: Socket<DataSentOverWire>) => void): this;
-	addListener(method: 'close', listener: (socket: Socket<DataSentOverWire>) => void): this;
+	addListener(method: 'connection', listener: (socket: Socket<MessageType>) => void): this;
+	addListener(method: 'close', listener: (socket: Socket<MessageType>) => void): this;
 	addListener(method: 'ready', listener: () => void): this;
 
 	addListener(method: string, listener: (e?: any) => void): this {
@@ -268,3 +303,5 @@ export class SoxtendServer<DataSentOverWire extends AllowedType = string> extend
 		return this;
 	}
 }
+export type { Socket } from './client';
+export { ApiError } from './utils';

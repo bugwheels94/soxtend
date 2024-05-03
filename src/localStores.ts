@@ -15,7 +15,7 @@ export interface LocalGroupStore {
  * normal fetch will have response
  * receiver.get|post|put1
  */
-export class SocketGroupStore<DataSentOverWire extends AllowedType = string> {
+export class SocketGroupStore<DataSentOverWire extends AllowedType = 'string'> {
 	store: Map<string | number, Set<Socket<DataSentOverWire>>> = new Map();
 
 	add(socket: Socket<DataSentOverWire>, groupId: string | number) {
@@ -37,13 +37,13 @@ export class SocketGroupStore<DataSentOverWire extends AllowedType = string> {
 	}
 	remove(socket: Socket<DataSentOverWire>, groupId: string | number) {
 		const group = this.store.get(groupId);
-		group.delete(socket);
+		group?.delete(socket);
 	}
 	constructor() {
 		// this.clients.set('*', new SocketGroup());
 	}
 }
-export class IndividualSocketConnectionStore<DataSentOverWire extends AllowedType = string> {
+export class IndividualSocketConnectionStore<DataSentOverWire extends AllowedType = 'string'> {
 	store: Map<string, Socket<DataSentOverWire>> = new Map();
 
 	add(socket: Socket<DataSentOverWire>) {
