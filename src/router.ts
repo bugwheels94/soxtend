@@ -31,7 +31,7 @@ function createIndividualRespone(connectionId: string, message: RouterRequest, s
 	return {
 		_status: 200,
 		_url: String,
-		headers: undefined,
+		headers: {} as { [key: string]: string },
 		set: function (key: string, value: string) {
 			this.headers = this.headers || {};
 			this.headers[key] = value;
@@ -62,7 +62,7 @@ function createGroupResponse(groupId: string, message: RouterRequest, server: So
 	return {
 		_status: 200,
 		_url: String,
-		headers: undefined,
+		headers: {} as { [key: string]: string },
 		set: function (key: string, value: string) {
 			this.headers = this.headers || {};
 			this.headers[key] = value;
@@ -104,7 +104,7 @@ function createSelfResponse(instance: Socket, message: RouterRequest, server: So
 		},
 		_status: 200,
 		_url: String,
-		headers: undefined,
+		headers: {} as Record<string, string>,
 		set: function (key: string, value: string) {
 			this.headers = this.headers || {};
 			this.headers[key] = value;
@@ -146,7 +146,7 @@ export type RouterCallback<P extends object = object> = (
 export type Route = {
 	literalRoute: string;
 	match: MatchFunction<any>;
-	callbacks: RouterCallback[];
+	callbacks: RouterCallback<any>[];
 };
 
 type Params = Record<string, string>;
@@ -184,7 +184,7 @@ export class Router {
 		this.onConnectStore.forEach((cb) => cb(socket));
 	}
 
-	registerRoute(method: MethodEnum, url: string, ...callbacks: RouterCallback[]) {
+	registerRoute<T extends object>(method: MethodEnum, url: string, ...callbacks: RouterCallback<T>[]) {
 		this.requestStore[method].push({
 			literalRoute: url,
 			match: match(url, { decode: decodeURIComponent }),
