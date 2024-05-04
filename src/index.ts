@@ -117,6 +117,7 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 
 		const groupArray = encoder.encode(id);
 		const messageWithGroupId = new Uint8Array(serializedMessage.length + groupArray.length + 1);
+		console.log('sending to group buf', messageWithGroupId);
 		messageWithGroupId[0] = groupArray.length;
 		messageWithGroupId.set(groupArray, 1);
 		messageWithGroupId.set(serializedMessage, 1 + groupArray.length);
@@ -140,7 +141,7 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		this.distributor.enqueue(`${server}`, messageWithGroupId);
 	}
 	private async sendMessageAsStringToGroup(id: string, message: JsonObject) {
-		const serializedMessage = this.serialize(message) as Uint8Array;
+		const serializedMessage = this.serialize(message) as string;
 
 		const messageWithGroupId = id + ':' + serializedMessage;
 		console.log('sending to group', messageWithGroupId);
