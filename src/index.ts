@@ -134,6 +134,8 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 
 		const server = await this.distributor.get(`i:${id}`);
 		const messageWithGroupId = id + ':' + serializedMessage;
+		console.log('sending to individual', id, messageWithGroupId);
+
 		//@ts-ignore
 		this.distributor.enqueue(`${server}`, messageWithGroupId);
 	}
@@ -141,6 +143,7 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		const serializedMessage = this.serialize(message) as Uint8Array;
 
 		const messageWithGroupId = id + ':' + serializedMessage;
+		console.log('sending to group', messageWithGroupId);
 		// @ts-ignore
 		this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
 	}
@@ -179,6 +182,7 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		if (!this.distributor) return;
 		// @ts-ignore
 		this.distributor.listen(queueName, (message: string) => {
+			console.log('got from distributor individual', message);
 			const separator = message.indexOf(':');
 			const id = message.substring(1, separator);
 			const remaining = message.substring(separator + 1, message.length);
@@ -189,6 +193,8 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		if (!this.distributor) return;
 		// @ts-ignore
 		this.distributor.listen(queueName, (message: string) => {
+			console.log('got from distributor group', message);
+
 			const separator = message.indexOf(':');
 			const id = message.substring(0, separator);
 			const remaining = message.substring(separator + 1, message.length);
