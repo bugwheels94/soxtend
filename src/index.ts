@@ -117,7 +117,6 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 
 		const groupArray = encoder.encode(id);
 		const messageWithGroupId = new Uint8Array(serializedMessage.length + groupArray.length + 1);
-		console.log('sending to group buf', messageWithGroupId);
 		messageWithGroupId[0] = groupArray.length;
 		messageWithGroupId.set(groupArray, 1);
 		messageWithGroupId.set(serializedMessage, 1 + groupArray.length);
@@ -135,7 +134,6 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 
 		const server = await this.distributor.get(`i:${id}`);
 		const messageWithGroupId = id + ':' + serializedMessage;
-		console.log('sending to individual', id, messageWithGroupId);
 
 		//@ts-ignore
 		this.distributor.enqueue(`${server}`, messageWithGroupId);
@@ -144,7 +142,6 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		const serializedMessage = this.serialize(message) as string;
 
 		const messageWithGroupId = id + ':' + serializedMessage;
-		console.log('sending to group', messageWithGroupId);
 		// @ts-ignore
 		this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
 	}
@@ -183,7 +180,6 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		if (!this.distributor) return;
 		// @ts-ignore
 		this.distributor.listen(queueName, (message: string) => {
-			console.log('got from distributor individual', message);
 			const separator = message.indexOf(':');
 			const id = message.substring(1, separator);
 			const remaining = message.substring(separator + 1, message.length);
@@ -194,8 +190,6 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		if (!this.distributor) return;
 		// @ts-ignore
 		this.distributor.listen(queueName, (message: string) => {
-			console.log('got from distributor group', message);
-
 			const separator = message.indexOf(':');
 			const id = message.substring(0, separator);
 			const remaining = message.substring(separator + 1, message.length);
@@ -270,7 +264,9 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 						// }
 						rawSocket.send(socket.id);
 						this.emit('connection', socket);
-
+						rawSocket.on('ping', () => {
+							rawSocket.pong();
+						});
 						rawSocket.addListener('message', (data) => {
 							try {
 								// @ts-ignore
