@@ -134,11 +134,12 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 
 		const server = await this.distributor.get(`i:${id}`);
 		const messageWithGroupId = id + ':' + serializedMessage;
+
 		//@ts-ignore
 		this.distributor.enqueue(`${server}`, messageWithGroupId);
 	}
 	private async sendMessageAsStringToGroup(id: string, message: JsonObject) {
-		const serializedMessage = this.serialize(message) as Uint8Array;
+		const serializedMessage = this.serialize(message) as string;
 
 		const messageWithGroupId = id + ':' + serializedMessage;
 		// @ts-ignore
@@ -263,7 +264,9 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 						// }
 						rawSocket.send(socket.id);
 						this.emit('connection', socket);
-
+						rawSocket.on('ping', () => {
+							rawSocket.pong();
+						});
 						rawSocket.addListener('message', (data) => {
 							try {
 								// @ts-ignore
