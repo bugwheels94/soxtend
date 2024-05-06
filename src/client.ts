@@ -6,7 +6,7 @@ import EventEmitter from 'events';
 import { AllowedType, DataMapping, JsonObject, Serialize } from './utils';
 import { SoxtendServer } from '.';
 import { GROUPS_BY_CONNECTION_ID, SERVERS_HAVING_GROUP } from './constants';
-
+import { nanoid } from 'nanoid';
 export type ClientResponse = {
 	_id: number;
 	status: HttpStatusCode;
@@ -33,7 +33,7 @@ export type ClientPromiseStore = Record<
 >;
 
 export class Socket<DataSentOverWire extends AllowedType = 'string'> extends EventEmitter {
-	public readonly id: string = crypto.randomUUID();
+	public readonly id: string;
 	private serialize: Serialize<DataMapping<DataSentOverWire>>;
 	storage: Record<string, any> = {};
 	mode?: string | Uint8Array;
@@ -49,12 +49,12 @@ export class Socket<DataSentOverWire extends AllowedType = 'string'> extends Eve
 	public async initialize() {
 		const id = this.id;
 		this.server.individualSocketConnectionStore.add(this);
-		return this.server.distributor.set(`i:${id}`, this.server.serverId);
+		return this.server.distributor.set(`i:${id}`, this.server.id);
 	}
 	public async clear() {
 		const id = this.id;
 		this.server.individualSocketConnectionStore.remove(id);
-		return this.server.distributor.set(`i:${id}`, this.server.serverId);
+		return this.server.distributor.set(`i:${id}`, this.server.id);
 	}
 	constructor(
 		socket: WebSocket,
@@ -74,6 +74,8 @@ export class Socket<DataSentOverWire extends AllowedType = 'string'> extends Eve
 		this.mode = mode;
 		this.rawSocket = socket;
 		this.server = server;
+		this.id = this.server.id + nanoid();
+
 		// this.store = store;
 		this.initialize();
 	}
@@ -83,14 +85,14 @@ export class Socket<DataSentOverWire extends AllowedType = 'string'> extends Eve
 		this.server.socketGroupStore.add(this, groupId);
 		return Promise.all([
 			this.server.distributor.addListItem(`${GROUPS_BY_CONNECTION_ID}${this.id}`, groupId),
-			this.server.distributor.addListItem(`${SERVERS_HAVING_GROUP}${groupId}`, this.server.serverId),
+			this.server.distributor.addListItem(`${SERVERS_HAVING_GROUP}${groupId}`, this.server.id),
 		]);
 	}
 
 	async joinGroups(groupdIds: Iterable<string>) {
 		for (let groupId of groupdIds) {
 			this.server.socketGroupStore.add(this, groupId);
-			this.server.distributor.addListItem(`${SERVERS_HAVING_GROUP}${groupId}`, this.server.serverId);
+			this.server.distributor.addListItem(`${SERVERS_HAVING_GROUP}${groupId}`, this.server.id);
 		}
 		this.server.distributor.addListItems(`${GROUPS_BY_CONNECTION_ID}${this.id}`, groupdIds);
 	}
