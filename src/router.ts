@@ -97,7 +97,7 @@ function createSelfResponse(instance: Socket, message: RouterRequest, server: So
 			return instance.leaveGroup(groupId);
 		},
 		leaveGroups: async (groups: string[]) => {
-			return instance.leaveGroups(groups);
+			return instance.leaveGroups(new Set(groups));
 		},
 		leaveAllGroups: async () => {
 			return instance.leaveAllGroups();

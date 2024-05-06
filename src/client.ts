@@ -1,11 +1,9 @@
 import WebSocket from 'isomorphic-ws';
 import HttpStatusCode from './statusCodes';
 // import { MessageStore } from './messageStore';
-import crypto from 'crypto';
 import EventEmitter from 'events';
 import { AllowedType, DataMapping, JsonObject, Serialize } from './utils';
 import { SoxtendServer } from '.';
-import { GROUPS_BY_CONNECTION_ID, SERVERS_HAVING_GROUP } from './constants';
 import { nanoid } from 'nanoid';
 export type ClientResponse = {
 	_id: number;
@@ -83,37 +81,27 @@ export class Socket<DataSentOverWire extends AllowedType = 'string'> extends Eve
 
 	public async joinGroup(groupId: string) {
 		this.server.socketGroupStore.add(this, groupId);
-		return Promise.all([
-			this.server.distributor.addListItem(`${GROUPS_BY_CONNECTION_ID}${this.id}`, groupId),
-			this.server.distributor.addListItem(`${SERVERS_HAVING_GROUP}${groupId}`, this.server.id),
-		]);
 	}
 
 	async joinGroups(groupdIds: Iterable<string>) {
 		for (let groupId of groupdIds) {
 			this.server.socketGroupStore.add(this, groupId);
-			this.server.distributor.addListItem(`${SERVERS_HAVING_GROUP}${groupId}`, this.server.id);
 		}
-		this.server.distributor.addListItems(`${GROUPS_BY_CONNECTION_ID}${this.id}`, groupdIds);
 	}
 	async leaveGroup(groupId: string) {
 		this.server.socketGroupStore.remove(this, groupId);
-
-		return this.server.distributor.removeListItem(`${GROUPS_BY_CONNECTION_ID}${this.id}`, groupId);
 	}
 	async leaveAllGroups() {
-		const groups = await this.server.distributor.getListItems(`${GROUPS_BY_CONNECTION_ID}${this.id}`);
+		const groups = this.server.socketGroupStore.myGroups.get(this.id);
+		if (!groups) return;
 		return this.leaveGroups(groups);
 	}
-	async leaveGroups(groups: string[]) {
-		if (!groups.length) return;
+	async leaveGroups(groups: Set<string | number>) {
 		for (let group of groups) {
 			this.server.socketGroupStore.remove(this, group);
 		}
-
-		return Promise.all([this.server.distributor.removeListItems(`${GROUPS_BY_CONNECTION_ID}${this.id}`, groups)]);
 	}
-	async getAllGroups(socketId?: string) {
-		return this.server.distributor.getListItems(`${GROUPS_BY_CONNECTION_ID}${socketId || this.id}`);
+	async getAllGroups() {
+		return this.server.socketGroupStore.myGroups.get(this.id);
 	}
 }

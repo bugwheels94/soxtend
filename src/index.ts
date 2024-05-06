@@ -1,13 +1,12 @@
 import WebSocket from 'isomorphic-ws';
 import { Socket } from './client';
 import { ServerOptions } from 'ws';
-import crypto from 'crypto';
 import { MessageDistributor } from './distributor';
 // import { MessageStore } from './messageStore';
 import EventEmitter from 'events';
 import { IndividualSocketConnectionStore, SocketGroupStore } from './localStores';
 import { AllowedType, DataMapping, Deserialize, JsonObject, Serialize } from './utils';
-import { SERVERS_HAVING_GROUP, SERVER_MESSAGES_GROUP_QUEUE } from './constants';
+import { nanoid } from 'nanoid';
 type SoxtendServerEvents = 'connection' | 'close';
 
 declare global {
@@ -231,7 +230,7 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 			this.sendToGroup = this.sendMessageAsStringToGroup;
 		}
 		this.distributor = distributor;
-		this.id = crypto.randomUUID();
+		this.id = nanoid();
 		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
 		this.socketGroupStore = new SocketGroupStore<MessageType>();
 		this.rawWebSocketServer = new WebSocket.Server(options);

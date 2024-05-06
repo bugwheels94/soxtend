@@ -17,7 +17,7 @@ export interface LocalGroupStore {
  */
 export class SocketGroupStore<DataSentOverWire extends AllowedType = 'string'> {
 	store: Map<string | number, Set<Socket<DataSentOverWire>>> = new Map();
-
+	myGroups: Map<string, Set<string | number>> = new Map();
 	add(socket: Socket<DataSentOverWire>, groupId: string | number) {
 		// if (!groupId) {
 		// 	return new SocketGroup(socketSet);
@@ -30,6 +30,12 @@ export class SocketGroupStore<DataSentOverWire extends AllowedType = 'string'> {
 		const newClient = new Set<Socket<DataSentOverWire>>();
 		newClient.add(socket);
 		this.store.set(groupId, newClient);
+		let set = this.myGroups.get(socket.id);
+		if (!set) {
+			set = new Set();
+			this.myGroups.set(socket.id, set);
+		}
+		set.add(groupId);
 		return newClient;
 	}
 	find(id: string | number) {
@@ -37,6 +43,7 @@ export class SocketGroupStore<DataSentOverWire extends AllowedType = 'string'> {
 	}
 	remove(socket: Socket<DataSentOverWire>, groupId: string | number) {
 		const group = this.store.get(groupId);
+		this.myGroups.get(socket.id)?.delete(groupId);
 		group?.delete(socket);
 	}
 	constructor() {
