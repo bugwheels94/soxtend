@@ -45,14 +45,11 @@ export class Socket<DataSentOverWire extends AllowedType = 'string'> extends Eve
 		this.rawSocket.send(serializedMessage);
 	}
 	public async initialize() {
-		const id = this.id;
 		this.server.individualSocketConnectionStore.add(this);
-		return this.server.distributor.set(`i:${id}`, this.server.id);
 	}
 	public async clear() {
 		const id = this.id;
 		this.server.individualSocketConnectionStore.remove(id);
-		return this.server.distributor.set(`i:${id}`, this.server.id);
 	}
 	constructor(
 		socket: WebSocket,
