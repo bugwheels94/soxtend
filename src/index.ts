@@ -75,7 +75,7 @@ const encoder = new TextEncoder();
 
 const decoder = new TextDecoder();
 export class SoxtendServer<MessageType extends AllowedType = 'string'> extends EventEmitter {
-	serverId: string;
+	id: string;
 	rawWebSocketServer: WebSocket.Server;
 	distributor: MessageDistributor<MessageType, any>;
 	eventStore: Record<
@@ -100,14 +100,14 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		}
 		if (!this.distributor) return;
 
-		const server = await this.distributor.get(`i:${id}`);
+		const serverId = id.slice(0, 21);
 		const groupArray = encoder.encode(id);
 		const messageWithGroupId = new Uint8Array(serializedMessage.length + groupArray.length + 1);
 		messageWithGroupId[0] = groupArray.length;
 		messageWithGroupId.set(groupArray, 1);
 		messageWithGroupId.set(serializedMessage, 1 + groupArray.length);
 		// @ts-ignore
-		this.distributor.enqueue(`${server}`, messageWithGroupId);
+		this.distributor.enqueue(`${serverId}`, messageWithGroupId);
 	}
 	private async sendMessageAsBufferToGroup(id: string, message: JsonObject) {
 		// this.socketGroupStore.find(id)?.forEach((socket) => {
@@ -132,11 +132,12 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 		}
 		if (!this.distributor) return;
 
-		const server = await this.distributor.get(`i:${id}`);
+		const serverId = id.slice(0, 21);
+
 		const messageWithGroupId = id + ':' + serializedMessage;
 
 		//@ts-ignore
-		this.distributor.enqueue(`${server}`, messageWithGroupId);
+		this.distributor.enqueue(`${serverId}`, messageWithGroupId);
 	}
 	private async sendMessageAsStringToGroup(id: string, message: JsonObject) {
 		const serializedMessage = this.serialize(message) as string;
@@ -230,21 +231,21 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 			this.sendToGroup = this.sendMessageAsStringToGroup;
 		}
 		this.distributor = distributor;
-		this.serverId = crypto.randomUUID();
+		this.id = crypto.randomUUID();
 		this.individualSocketConnectionStore = new IndividualSocketConnectionStore();
 		this.socketGroupStore = new SocketGroupStore<MessageType>();
 		this.rawWebSocketServer = new WebSocket.Server(options);
 
 		Promise.all([
 			this.distributor
-				? this.distributor.initialize(this.serverId, {
+				? this.distributor.initialize(this.id, {
 						messageType,
 				  })
 				: undefined,
 			// options.messageStore ? options.messageStore.initialize(this.serverId) : undefined,
 		])
 			.then(() => {
-				this.listenToIndividualQueue(`${this.serverId}`);
+				this.listenToIndividualQueue(`${this.id}`);
 				this.listenToGroupQueue(`broadcast`);
 				this.emit('ready');
 				this.rawWebSocketServer.on('connection', (rawSocket: WebSocket) => {
