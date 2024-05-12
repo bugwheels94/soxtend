@@ -22,22 +22,8 @@ export interface MessageDistributor<T extends AllowedType, ListType = Iterable<s
 }
 
 export { InMemoryMessageDistributor } from './inMemory';
-type Values = string | Uint8Array;
 
 // Define a helper type that maps 'AllowedType' to corresponding 'Values'
 type DataMapping<T> = T extends 'string' ? string : T extends 'binary' ? Uint8Array : never;
 
-class X<MessageType extends AllowedType> {
-	data: DataMapping<MessageType>;
-
-	constructor(data: DataMapping<MessageType>) {
-		this.data = data;
-	}
-}
-
 // Usage examples
-const instanceWithString = new X<'string'>('hello world');
-const instanceWithUint8Array = new X<'binary'>(new Uint8Array([1, 2, 3]));
-
-console.log(instanceWithString.data); // data is string
-console.log(instanceWithUint8Array.data);

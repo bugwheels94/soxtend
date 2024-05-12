@@ -40,7 +40,6 @@ export class RedisMessageDistributor<T extends AllowedType = 'string'> implement
 		}
 	}
 	async enqueueString(queueId: string, message: string) {
-		console.log('distributor sending to', queueId, message);
 		this.redisClient.publish(queueId, message);
 	}
 	async enqueueBuffer(queueId: string, message: Uint8Array) {
