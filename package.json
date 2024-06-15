@@ -10,10 +10,10 @@
 			"require": "./dist/cjs/index.js"
 		},
 		"./router": {
-			"types": "./dist/types/router.d.ts",
-			"import": "./dist/esm/router.js",
-			"default": "./dist/esm/router.js",
-			"require": "./dist/cjs/router.js"
+			"types": "./dist/types/wrappers/router.d.ts",
+			"import": "./dist/esm/wrappers/router.js",
+			"default": "./dist/esm/wrappers/router.js",
+			"require": "./dist/cjs/wrappers/router.js"
 		},
 		"./redisDistributor": {
 			"types": "./dist/types/distributor/redis.d.ts",
@@ -52,7 +52,6 @@
 	"homepage": "https://github.com/bugwheels94/soxtend#readme",
 	"scripts": {
 		"test": "jest",
-		"prepare": "husky install",
 		"build:watch": "run-p build:code:watch build:types:watch",
 		"build:types": "tsc --project ./tsconfig.json",
 		"build:types:watch": "tsc --watch --project ./tsconfig.json",
@@ -87,7 +86,6 @@
 		"cz-conventional-changelog": "^3.3.0",
 		"false": "^0.0.4",
 		"fast-glob": "^3.2.12",
-		"husky": "^7.0.4",
 		"jest": "^29.6.4",
 		"lint-staged": "^12.3.7",
 		"nanoid": "^5.0.7",

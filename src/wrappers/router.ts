@@ -1,10 +1,13 @@
-import HttpStatusCode from './statusCodes';
-import { ApiError, MethodEnum, Method } from './utils';
+import HttpStatusCode from '../statusCodes';
+import { ApiError, MethodEnum, Method } from '../utils';
 import { match, MatchFunction, MatchResult } from 'path-to-regexp';
-import { Socket } from './client';
-import { SoxtendServer } from '.';
+import { Socket } from '../client';
+import { SoxtendServer } from '..';
 export type RouterStore = Record<MethodEnum, Route[]>;
 
+/**
+ * router.on("/path/:id?query")
+ */
 export type RouterRequest<P extends object = object> = {
 	id: string;
 	url: string;
@@ -52,6 +55,7 @@ function createIndividualRespone(connectionId: string, message: RouterRequest, s
 				status: options.status === undefined ? this._status : options.status,
 				data,
 			};
+			// @ts-ignore
 			server.sendToIndividual(connectionId, finalMessage);
 			return this;
 		},
@@ -82,6 +86,8 @@ function createGroupResponse(groupId: string, message: RouterRequest, server: So
 				status: options.status === undefined ? this._status : options.status,
 				data,
 			};
+			// @ts-ignore
+
 			server.sendToGroup(groupId, finalMessage);
 			return this;
 		},
@@ -133,6 +139,8 @@ function createSelfResponse(instance: Socket, message: RouterRequest, server: So
 				_id: message.id,
 				data,
 			};
+			// @ts-ignore
+
 			instance.send(finalMessage);
 			return this;
 		},
@@ -242,4 +250,4 @@ export class Router {
 		}
 	}
 }
-export { ApiError } from './utils';
+export { ApiError } from '../utils';

@@ -32,17 +32,14 @@ export type ClientPromiseStore = Record<
 
 export class Socket<DataSentOverWire extends AllowedType = 'string'> extends EventEmitter {
 	public readonly id: string;
-	private serialize: Serialize<DataMapping<DataSentOverWire>>;
 	storage: Record<string, any> = {};
 	mode?: string | Uint8Array;
 	rawSocket: WebSocket;
 	// store?: MessageStore | undefined;
 	groups: Set<string> = new Set();
 	server: SoxtendServer<DataSentOverWire>;
-	send(object: JsonObject) {
-		const serializedMessage = this.serialize(object);
-		//@ts-ignore
-		this.rawSocket.send(serializedMessage);
+	send(message: WebSocket.Data) {
+		this.rawSocket.send(message);
 	}
 	public async initialize() {
 		this.server.individualSocketConnectionStore.add(this);
@@ -56,15 +53,12 @@ export class Socket<DataSentOverWire extends AllowedType = 'string'> extends Eve
 		{
 			server,
 			mode,
-			serialize,
 		}: {
-			serialize: Serialize<DataMapping<DataSentOverWire>>;
 			server: SoxtendServer<DataSentOverWire>;
 			mode: string | Uint8Array;
 		} // , store?: MessageStore
 	) {
 		super();
-		this.serialize = serialize;
 
 		this.mode = mode;
 		this.rawSocket = socket;
