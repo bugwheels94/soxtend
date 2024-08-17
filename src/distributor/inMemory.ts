@@ -13,17 +13,6 @@ export class InMemoryMessageDistributor<T extends AllowedType = 'string'> implem
 
 	async initialize() {
 		this.initialized = true;
-		if (this.messageType === 'binary') {
-			// @ts-ignore
-			this.enqueue = this.enqueueBuffer;
-			// @ts-ignore
-			this.listen = this.listenBuffer;
-		} else {
-			// @ts-ignore
-			this.enqueue = this.enqueueString;
-			// @ts-ignore
-			this.listen = this.listenString;
-		}
 	}
 
 	async addListItem(listId: string, item: string) {
