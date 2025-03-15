@@ -4,30 +4,35 @@
 	"description": "Websockets on steroid",
 	"exports": {
 		"./server": {
+			"development": "./src/index.ts",
 			"types": "./dist/types/index.d.ts",
 			"import": "./dist/esm/index.js",
 			"default": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
 		"./router": {
+			"development": "./src/wrappers/router.ts",
 			"types": "./dist/types/wrappers/router.d.ts",
 			"import": "./dist/esm/wrappers/router.js",
 			"default": "./dist/esm/wrappers/router.js",
 			"require": "./dist/cjs/wrappers/router.js"
 		},
 		"./redisDistributor": {
+			"development": "./src/distributor/redis.ts",
 			"types": "./dist/types/distributor/redis.d.ts",
 			"import": "./dist/esm/distributor/redis.js",
 			"default": "./dist/esm/distributor/redis.js",
 			"require": "./dist/cjs/distributor/redis.js"
 		},
 		"./inMemoryDistributor": {
+			"development": "./src/distributor/inMemory.ts",
 			"types": "./dist/types/distributor/inMemory.d.ts",
 			"import": "./dist/esm/distributor/inMemory.js",
 			"default": "./dist/esm/distributor/inMemory.js",
 			"require": "./dist/cjs/distributor/inMemory.js"
 		},
 		"./client": {
+			"development": "./src/client/index.ts",
 			"types": "./dist/types/client/index.d.ts",
 			"import": "./dist/esm/client/index.js",
 			"default": "./dist/esm/client/index.js",

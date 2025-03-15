@@ -13,7 +13,6 @@ declare global {
 		groups: string[];
 	}
 }
-const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 export class SoxtendServer<MessageType extends AllowedType = 'string'> extends EventEmitter {
 	id: string;
@@ -30,46 +29,36 @@ export class SoxtendServer<MessageType extends AllowedType = 'string'> extends E
 	};
 	socketGroupStore: SocketGroupStore<MessageType>;
 	individualSocketConnectionStore: IndividualSocketConnectionStore<MessageType>;
-	async sendToIndividual(id: string, message: WebSocket.Data) {
+	async sendToIndividual(id: string, message: JsonObject) {
+		console.log('sending to individual', id, message);
+		let final = '';
 		if (typeof message === 'string') {
-			const socket = this.individualSocketConnectionStore.find(id);
-			if (socket) {
-				socket.rawSocket.send(message);
-				return;
-			}
-			if (!this.distributor) return;
-			const serverId = id.slice(0, 21);
-			const messageWithGroupId = id + ':' + message;
-			//@ts-ignore
-			this.distributor.enqueue(`${serverId}`, messageWithGroupId);
-		} else if (message instanceof Uint8Array) {
-			const socket = this.individualSocketConnectionStore.find(id);
-			if (socket) {
-				socket.rawSocket.send(message);
-				return;
-			}
-			if (!this.distributor) return;
-			const serverId = id.slice(0, 21);
-			const groupArray = encoder.encode(id);
-			const messageWithGroupId = new Uint8Array(message.length + groupArray.length + 1);
-			messageWithGroupId[0] = groupArray.length;
-			messageWithGroupId.set(groupArray, 1);
-			messageWithGroupId.set(message, 1 + groupArray.length); // @ts-ignore
-			this.distributor.enqueue(`${serverId}`, messageWithGroupId);
+			final = message;
+		} else {
+			final = JSON.stringify(message);
 		}
+		const socket = this.individualSocketConnectionStore.find(id);
+		if (socket) {
+			socket.rawSocket.send(final);
+			return;
+		}
+		if (!this.distributor) return;
+		const serverId = id.slice(0, 21);
+		const messageWithGroupId = id + ':' + message;
+		//@ts-ignore
+		this.distributor.enqueue(`${serverId}`, messageWithGroupId);
 	}
-	async sendToGroup(id: string, message: WebSocket.Data) {
+	async sendToGroup(id: string, message: JsonObject) {
+		console.log('sending to group', id, message);
+
+		let final = '';
 		if (typeof message === 'string') {
-			const messageWithGroupId = id + ':' + message; // @ts-ignore
-			this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
-		} else if (message instanceof Uint8Array) {
-			const groupArray = encoder.encode(id);
-			const messageWithGroupId = new Uint8Array(message.length + groupArray.length + 1);
-			messageWithGroupId[0] = groupArray.length;
-			messageWithGroupId.set(groupArray, 1);
-			messageWithGroupId.set(message, 1 + groupArray.length); //@ts-ignore
-			this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
+			final = message;
+		} else {
+			final = JSON.stringify(message);
 		}
+		const messageWithGroupId = id + ':' + final; // @ts-ignore
+		this.distributor.enqueue(`broadcast`, messageWithGroupId); // send to the server oin group channel
 	}
 	async listenToGroupQueue(queueName: string) {
 		if (!this.distributor) return; // @ts-ignore
